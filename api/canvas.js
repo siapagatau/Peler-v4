@@ -17,7 +17,7 @@ const os = require("os");
 ffmpeg.setFfmpegPath(ffmpegPath);
 Font.loadDefault();
 
-// ---------- Custom Greetings Card ----------
+// ---------- Custom Greetings Card (diperbaiki) ----------
 class GreetingsCard extends Builder {
   constructor() {
     super(930, 280);
@@ -36,25 +36,81 @@ class GreetingsCard extends Builder {
   async render() {
     const { type, displayName, avatar, message } = this.options.getOptions();
     const image = await loadImage(avatar || "https://cdn.discordapp.com/embed/avatars/0.png");
+    // Semua div dengan >1 child wajib punya display:flex
     return JSX.createElement(
       "div",
-      { className: "h-full w-full flex flex-col items-center justify-center bg-[#23272A] rounded-xl" },
+      {
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "100%",
+          height: "100%",
+          backgroundColor: "#23272A",
+          borderRadius: "12px",
+        },
+      },
       JSX.createElement(
         "div",
-        { className: "px-6 bg-[#2B2F35AA] w-[96%] h-[84%] rounded-lg flex items-center" },
-        JSX.createElement("img", { src: image.toDataURL(), className: "flex h-24 w-24 rounded-full mr-6" }),
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            width: "96%",
+            height: "84%",
+            backgroundColor: "#2B2F35AA",
+            borderRadius: "8px",
+            paddingLeft: "24px",
+            paddingRight: "24px",
+          },
+        },
+        JSX.createElement("img", {
+          src: image.toDataURL(),
+          style: {
+            width: "96px",
+            height: "96px",
+            borderRadius: "50%",
+            marginRight: "24px",
+          },
+        }),
         JSX.createElement(
           "div",
-          { className: "flex flex-col" },
+          {
+            style: {
+              display: "flex",
+              flexDirection: "column",
+            },
+          },
           JSX.createElement(
             "h1",
-            { className: "text-5xl text-white font-bold m-0" },
-            type === "welcome" ? "Welcome" : "Goodbye", ", ",
-            JSX.createElement("span", { className: "text-blue-500" }, displayName || "User", "!")
+            {
+              style: {
+                fontSize: "48px",
+                color: "#ffffff",
+                fontWeight: "bold",
+                margin: "0",
+              },
+            },
+            type === "welcome" ? "Welcome" : "Goodbye",
+            ", ",
+            JSX.createElement(
+              "span",
+              { style: { color: "#3b82f6" } },
+              displayName || "User",
+              "!"
+            )
           ),
           JSX.createElement(
             "p",
-            { className: "text-gray-300 text-3xl m-0 mt-2" },
+            {
+              style: {
+                color: "#d1d5db",
+                fontSize: "30px",
+                margin: "0",
+                marginTop: "8px",
+              },
+            },
             message || (type === "welcome" ? "Thanks for joining!" : "See you later!")
           )
         )
@@ -63,11 +119,7 @@ class GreetingsCard extends Builder {
   }
 }
 
-// ---------- Profile Card ----------
-// PENTING: canvacord JSX mengharuskan setiap <div> yang memiliki lebih dari
-// 1 child node harus punya explicit style display: flex/contents/none.
-// Kita pakai display:flex + position:absolute pada children untuk efek layering.
-
+// ---------- Helper components untuk ProfileCard (semua sudah punya display) ----------
 function _statBlock(value, label) {
   return JSX.createElement(
     "div",
@@ -118,6 +170,7 @@ function _divider() {
   });
 }
 
+// ---------- Profile Card (diperbaiki) ----------
 class ProfileCard extends Builder {
   constructor() {
     super(960, 540);
@@ -167,7 +220,7 @@ class ProfileCard extends Builder {
 
     const accentColor = `#${(accent || "6366f1").replace("#", "")}`;
 
-    // ── Avatar: display flex agar ring + foto valid sebagai 2 children ──
+    // Avatar dengan ring (2 children -> display:flex)
     const avatarEl = JSX.createElement(
       "div",
       {
@@ -206,8 +259,8 @@ class ProfileCard extends Builder {
       })
     );
 
-    // ── Info panel: nama + username (selalu 2 child) ──
-    const infoDivChildren = [
+    // Info panel (2 atau 3 children -> display:flex column)
+    const infoChildren = [
       JSX.createElement(
         "div",
         {
@@ -235,9 +288,8 @@ class ProfileCard extends Builder {
         username ? `@${username}` : "\u00a0"
       ),
     ];
-
     if (bio) {
-      infoDivChildren.push(
+      infoChildren.push(
         JSX.createElement(
           "div",
           {
@@ -265,10 +317,10 @@ class ProfileCard extends Builder {
           right: "36px",
         },
       },
-      ...infoDivChildren
+      ...infoChildren
     );
 
-    // ── Stats row: 5 children (3 blok + 2 divider) ──
+    // Stats row (5 children -> display:flex row)
     const statsEl = JSX.createElement(
       "div",
       {
@@ -292,7 +344,7 @@ class ProfileCard extends Builder {
       _statBlock(statValue3, statLabel3)
     );
 
-    // ── Background layer ──
+    // Background layer
     const bgEl = background
       ? JSX.createElement("img", {
           src: background,
@@ -352,7 +404,6 @@ class ProfileCard extends Builder {
       },
     });
 
-    // Kumpulkan semua children, badge hanya ditambah jika ada
     const rootChildren = [bgEl, overlayEl, stripeEl, panelEl, avatarEl, infoEl, statsEl];
 
     if (badge) {
@@ -382,7 +433,7 @@ class ProfileCard extends Builder {
       );
     }
 
-    // Root harus display: flex karena punya banyak children
+    // Root harus display:flex karena banyak children
     return JSX.createElement(
       "div",
       {
@@ -400,16 +451,13 @@ class ProfileCard extends Builder {
   }
 }
 
-// ---------- Helpers ----------
+// ---------- Helpers (tidak berubah) ----------
 function setCorsHeaders(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-/**
- * Jalankan satu kali konversi WebP animated dengan opsi tertentu.
- */
 function _runConvertToWebP(inputBuffer, { quality, fps = 0, width = 0 }) {
   const tmpIn  = path.join(os.tmpdir(), `conv_in_${Date.now()}_${Math.random().toString(36).slice(2)}.webp`);
   const tmpOut = path.join(os.tmpdir(), `conv_out_${Date.now()}_${Math.random().toString(36).slice(2)}.webp`);
