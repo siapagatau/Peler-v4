@@ -63,40 +63,48 @@ class GreetingsCard extends Builder {
   }
 }
 
-// ---------- Profile Card (Canvas manual, kompatibel dengan Canvacord) ----------
+// ---------- Profile Card (Canvas manual, tanpa prototype extension) ----------
 class ProfileCard extends Builder {
   constructor() {
     super(960, 540);
     this.bootstrap({
-      name: "",
-      username: "",
-      bio: "",
-      avatar: "",
-      background: "",
-      statLabel1: "Pesan",
-      statValue1: "0",
-      statLabel2: "Level",
-      statValue2: "1",
-      statLabel3: "Poin",
-      statValue3: "0",
-      accent: "#6366f1",
-      badge: "",
+      name: "", username: "", bio: "", avatar: "", background: "",
+      statLabel1: "Pesan", statValue1: "0",
+      statLabel2: "Level", statValue2: "1",
+      statLabel3: "Poin", statValue3: "0",
+      accent: "#6366f1", badge: "",
     });
   }
 
-  setName(v)        { this.options.set("name", v);        return this; }
-  setUsername(v)    { this.options.set("username", v);    return this; }
-  setBio(v)         { this.options.set("bio", v);         return this; }
-  setAvatar(v)      { this.options.set("avatar", v);      return this; }
-  setBackground(v)  { this.options.set("background", v);  return this; }
-  setStatLabel1(v)  { this.options.set("statLabel1", v);  return this; }
-  setStatValue1(v)  { this.options.set("statValue1", v);  return this; }
-  setStatLabel2(v)  { this.options.set("statLabel2", v);  return this; }
-  setStatValue2(v)  { this.options.set("statValue2", v);  return this; }
-  setStatLabel3(v)  { this.options.set("statLabel3", v);  return this; }
-  setStatValue3(v)  { this.options.set("statValue3", v);  return this; }
-  setAccent(v)      { this.options.set("accent", v);      return this; }
-  setBadge(v)       { this.options.set("badge", v);       return this; }
+  setName(v)        { this.options.set("name", v); return this; }
+  setUsername(v)    { this.options.set("username", v); return this; }
+  setBio(v)         { this.options.set("bio", v); return this; }
+  setAvatar(v)      { this.options.set("avatar", v); return this; }
+  setBackground(v)  { this.options.set("background", v); return this; }
+  setStatLabel1(v)  { this.options.set("statLabel1", v); return this; }
+  setStatValue1(v)  { this.options.set("statValue1", v); return this; }
+  setStatLabel2(v)  { this.options.set("statLabel2", v); return this; }
+  setStatValue2(v)  { this.options.set("statValue2", v); return this; }
+  setStatLabel3(v)  { this.options.set("statLabel3", v); return this; }
+  setStatValue3(v)  { this.options.set("statValue3", v); return this; }
+  setAccent(v)      { this.options.set("accent", v); return this; }
+  setBadge(v)       { this.options.set("badge", v); return this; }
+
+  // Fungsi utilitas untuk menggambar rounded rectangle
+  _roundedRect(ctx, x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    return this;
+  }
 
   async render() {
     const {
@@ -110,7 +118,7 @@ class ProfileCard extends Builder {
     const canvas = createCanvas(this.width, this.height);
     const ctx = canvas.getContext("2d");
 
-    // --- 1. Background (gambar atau gradien) ---
+    // --- Background ---
     if (background && background.trim() !== "") {
       try {
         const bgImg = await loadImage(background);
@@ -123,7 +131,7 @@ class ProfileCard extends Builder {
       this._drawGradientBackground(ctx);
     }
 
-    // --- 2. Overlay gelap di bagian bawah (glass panel area) ---
+    // --- Overlay gelap bawah ---
     ctx.fillStyle = "rgba(0,0,0,0.38)";
     ctx.fillRect(0, this.height - 240, this.width, 240);
     ctx.strokeStyle = "rgba(255,255,255,0.14)";
@@ -133,85 +141,79 @@ class ProfileCard extends Builder {
     ctx.lineTo(this.width, this.height - 240);
     ctx.stroke();
 
-    // --- 3. Accent stripe kiri ---
+    // --- Accent stripe kiri ---
     ctx.fillStyle = accent;
     ctx.fillRect(0, 0, 5, this.height);
 
-    // --- 4. Avatar dengan ring gradient ---
-    const avatarUrl = avatar || "https://cdn.discordapp.com/embed/avatars/0.png";
+    // --- Avatar dengan ring ---
     let avatarImg;
     try {
-      avatarImg = await loadImage(avatarUrl);
+      avatarImg = await loadImage(avatar || "https://cdn.discordapp.com/embed/avatars/0.png");
     } catch {
       avatarImg = await loadImage("https://cdn.discordapp.com/embed/avatars/0.png");
     }
     const avatarSize = 132;
     const avatarX = 52;
-    const avatarY = this.height - 240 + (240 - avatarSize) / 2; // (540-240)=300, + (240-132)/2 = 300+54=354? Lebih mudah: bottom 168px dari bawah? Hitung manual: posisi Y = height - 168 - avatarSize = 540-168-132=240
-    const avatarYPos = this.height - 168 - avatarSize; // 540-168-132=240
+    const avatarY = this.height - 168 - avatarSize; // 540-168-132 = 240
     // Ring gradient
     const ringSize = avatarSize + 8;
-    const ringGrad = ctx.createLinearGradient(avatarX-4, avatarYPos-4, avatarX+ringSize, avatarYPos+ringSize);
+    const ringGrad = ctx.createLinearGradient(avatarX-4, avatarY-4, avatarX+ringSize, avatarY+ringSize);
     ringGrad.addColorStop(0, accent);
     ringGrad.addColorStop(0.5, "rgba(255,255,255,0.12)");
     ringGrad.addColorStop(1, accent);
     ctx.beginPath();
-    ctx.arc(avatarX + avatarSize/2, avatarYPos + avatarSize/2, ringSize/2, 0, Math.PI*2);
+    ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, ringSize/2, 0, Math.PI*2);
     ctx.fillStyle = ringGrad;
     ctx.fill();
-    // Clip avatar lingkaran
+    // Clip lingkaran avatar
     ctx.save();
     ctx.beginPath();
-    ctx.arc(avatarX + avatarSize/2, avatarYPos + avatarSize/2, avatarSize/2, 0, Math.PI*2);
+    ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, Math.PI*2);
     ctx.clip();
-    ctx.drawImage(avatarImg, avatarX, avatarYPos, avatarSize, avatarSize);
+    ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
     ctx.restore();
 
-    // --- 5. Badge (jika ada) ---
+    // --- Badge ---
     if (badge && badge.trim() !== "") {
       ctx.font = "bold 10px 'Whitney', 'Roboto', sans-serif";
       const badgeText = badge.slice(0, 20);
       const badgeWidth = ctx.measureText(badgeText).width + 20;
       const badgeX = avatarX;
-      const badgeY = avatarYPos + avatarSize - 12;
+      const badgeY = avatarY + avatarSize - 12;
       ctx.fillStyle = accent;
-      ctx.shadowBlur = 0;
       ctx.beginPath();
-      ctx.roundRect(badgeX, badgeY, badgeWidth, 18, 9);
+      this._roundedRect(ctx, badgeX, badgeY, badgeWidth, 18, 9);
       ctx.fill();
       ctx.fillStyle = "#ffffff";
       ctx.fillText(badgeText, badgeX + 10, badgeY + 13);
     }
 
-    // --- 6. Nama ---
+    // --- Nama ---
     ctx.font = "800 28px 'Whitney', 'Roboto', sans-serif";
     ctx.fillStyle = "#ffffff";
-    ctx.shadowBlur = 0;
-    const nameText = name || "Nama Pengguna";
-    ctx.fillText(nameText, 214, avatarYPos + 32);
+    ctx.fillText(name || "Nama Pengguna", 214, avatarY + 32);
 
-    // --- 7. Username ---
+    // --- Username ---
     ctx.font = "600 14px 'Whitney', 'Roboto', sans-serif";
     ctx.fillStyle = accent;
-    const usernameText = username ? `@${username}` : "";
-    ctx.fillText(usernameText, 214, avatarYPos + 52);
+    ctx.fillText(username ? `@${username}` : "", 214, avatarY + 52);
 
-    // --- 8. Bio ---
+    // --- Bio ---
     if (bio && bio.trim() !== "") {
       ctx.font = "12px 'Whitney', 'Roboto', sans-serif";
       ctx.fillStyle = "rgba(255,255,255,0.68)";
       const bioText = bio.length > 60 ? bio.slice(0, 57) + "..." : bio;
-      ctx.fillText(bioText, 214, avatarYPos + 78);
+      ctx.fillText(bioText, 214, avatarY + 78);
     }
 
-    // --- 9. Statistik (3 kolom) ---
+    // --- Statistik ---
     const statsY = this.height - 48;
     const statItems = [
       { label: statLabel1, value: statValue1 },
       { label: statLabel2, value: statValue2 },
       { label: statLabel3, value: statValue3 },
     ];
-    const totalWidth = this.width - 104; // 52 kiri + 52 kanan
+    const totalWidth = this.width - 104;
     const colWidth = totalWidth / 3;
 
     ctx.font = "800 22px 'Whitney', 'Roboto', sans-serif";
@@ -229,7 +231,7 @@ class ProfileCard extends Builder {
     }
     ctx.textAlign = "left";
 
-    // --- separator garis antar stat (opsional) ---
+    // Separator garis
     ctx.strokeStyle = "rgba(255,255,255,0.18)";
     ctx.lineWidth = 1;
     for (let i = 1; i <= 2; i++) {
@@ -240,7 +242,6 @@ class ProfileCard extends Builder {
       ctx.stroke();
     }
 
-    // Kembalikan buffer PNG
     return canvas.toBuffer("image/png");
   }
 
