@@ -63,7 +63,7 @@ class GreetingsCard extends Builder {
   }
 }
 
-// ---------- Profile Card (Canvas manual, tanpa prototype extension) ----------
+// ---------- Profile Card (dengan normalisasi warna) ----------
 class ProfileCard extends Builder {
   constructor() {
     super(960, 540);
@@ -90,7 +90,15 @@ class ProfileCard extends Builder {
   setAccent(v)      { this.options.set("accent", v); return this; }
   setBadge(v)       { this.options.set("badge", v); return this; }
 
-  // Fungsi utilitas untuk menggambar rounded rectangle
+  // Normalisasi warna: pastikan diawali '#'
+  _normalizeColor(color) {
+    if (!color) return "#6366f1";
+    const str = String(color).trim();
+    if (str.startsWith("#")) return str;
+    return "#" + str;
+  }
+
+  // Fungsi utilitas rounded rectangle
   _roundedRect(ctx, x, y, w, h, r) {
     if (w < 2 * r) r = w / 2;
     if (h < 2 * r) r = h / 2;
@@ -114,6 +122,8 @@ class ProfileCard extends Builder {
       statLabel3, statValue3,
       accent, badge,
     } = this.options.getOptions();
+
+    const accentColor = this._normalizeColor(accent);
 
     const canvas = createCanvas(this.width, this.height);
     const ctx = canvas.getContext("2d");
@@ -142,7 +152,7 @@ class ProfileCard extends Builder {
     ctx.stroke();
 
     // --- Accent stripe kiri ---
-    ctx.fillStyle = accent;
+    ctx.fillStyle = accentColor;
     ctx.fillRect(0, 0, 5, this.height);
 
     // --- Avatar dengan ring ---
@@ -154,18 +164,17 @@ class ProfileCard extends Builder {
     }
     const avatarSize = 132;
     const avatarX = 52;
-    const avatarY = this.height - 168 - avatarSize; // 540-168-132 = 240
-    // Ring gradient
+    const avatarY = this.height - 168 - avatarSize; // 240
     const ringSize = avatarSize + 8;
     const ringGrad = ctx.createLinearGradient(avatarX-4, avatarY-4, avatarX+ringSize, avatarY+ringSize);
-    ringGrad.addColorStop(0, accent);
+    ringGrad.addColorStop(0, accentColor);
     ringGrad.addColorStop(0.5, "rgba(255,255,255,0.12)");
-    ringGrad.addColorStop(1, accent);
+    ringGrad.addColorStop(1, accentColor);
     ctx.beginPath();
     ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, ringSize/2, 0, Math.PI*2);
     ctx.fillStyle = ringGrad;
     ctx.fill();
-    // Clip lingkaran avatar
+    // Clip avatar
     ctx.save();
     ctx.beginPath();
     ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, Math.PI*2);
@@ -180,7 +189,7 @@ class ProfileCard extends Builder {
       const badgeWidth = ctx.measureText(badgeText).width + 20;
       const badgeX = avatarX;
       const badgeY = avatarY + avatarSize - 12;
-      ctx.fillStyle = accent;
+      ctx.fillStyle = accentColor;
       ctx.beginPath();
       this._roundedRect(ctx, badgeX, badgeY, badgeWidth, 18, 9);
       ctx.fill();
@@ -195,7 +204,7 @@ class ProfileCard extends Builder {
 
     // --- Username ---
     ctx.font = "600 14px 'Whitney', 'Roboto', sans-serif";
-    ctx.fillStyle = accent;
+    ctx.fillStyle = accentColor;
     ctx.fillText(username ? `@${username}` : "", 214, avatarY + 52);
 
     // --- Bio ---
