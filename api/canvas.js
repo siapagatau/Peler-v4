@@ -1,6 +1,7 @@
-const { loadImage, Font } = require("canvacord");
-const { createCanvas } = require("canvas"); // ← instal canvas
+const { createCanvas, loadImage } = require("@napi-rs/canvas");
+const { Font } = require("canvacord");
 
+// Load font bawaan canvacord (Whitney) ke @napi-rs/canvas
 Font.loadDefault();
 
 module.exports = async (req, res) => {
@@ -48,7 +49,7 @@ module.exports = async (req, res) => {
       ctx.fillRect(0, 0, width, height);
     }
 
-    // Overlay gelap
+    // Overlay gelap agar teks terbaca
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, 0, width, height);
 
@@ -71,26 +72,26 @@ module.exports = async (req, res) => {
     ctx.restore();
 
     // Nama
-    ctx.font = "bold 28px 'Whitney', 'Roboto'";
+    ctx.font = "bold 28px 'Whitney'";
     ctx.fillStyle = "#FFFFFF";
     ctx.fillText(name, avatarX + avatarSize + 20, avatarY + 35);
 
     // Username
     if (username) {
-      ctx.font = "18px 'Whitney', 'Roboto'";
+      ctx.font = "18px 'Whitney'";
       ctx.fillStyle = "#B9BBBE";
       ctx.fillText(`@${username}`, avatarX + avatarSize + 20, avatarY + 70);
     }
 
     // Bio
     if (bio) {
-      ctx.font = "15px 'Whitney', 'Roboto'";
+      ctx.font = "15px 'Whitney'";
       ctx.fillStyle = "#DCDDDE";
       const bioText = bio.length > 50 ? bio.slice(0, 47) + "..." : bio;
       ctx.fillText(bioText, avatarX + avatarSize + 20, avatarY + 105);
     }
 
-    // Statistik
+    // Statistik 3 kolom
     const statsY = height - 80;
     const statWidth = (width - 80) / 3;
     const statXStart = 40;
@@ -100,7 +101,7 @@ module.exports = async (req, res) => {
       { label: stat3label, value: stat3value }
     ];
 
-    ctx.font = "bold 24px 'Whitney', 'Roboto'";
+    ctx.font = "bold 24px 'Whitney'";
     ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
     for (let i = 0; i < stats.length; i++) {
@@ -108,7 +109,7 @@ module.exports = async (req, res) => {
       ctx.fillText(stats[i].value, x, statsY - 10);
     }
 
-    ctx.font = "14px 'Whitney', 'Roboto'";
+    ctx.font = "14px 'Whitney'";
     ctx.fillStyle = "#B9BBBE";
     for (let i = 0; i < stats.length; i++) {
       const x = statXStart + i * statWidth + statWidth/2;
@@ -116,7 +117,7 @@ module.exports = async (req, res) => {
     }
     ctx.textAlign = "left";
 
-    // Garis aksen
+    // Garis pemisah di atas statistik
     ctx.beginPath();
     ctx.moveTo(40, height - 110);
     ctx.lineTo(width - 40, height - 110);
@@ -124,12 +125,13 @@ module.exports = async (req, res) => {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Strip aksen di kiri
+    // Strip aksen di samping kiri
     ctx.fillStyle = accent;
     ctx.fillRect(0, 0, 8, height);
 
+    const buffer = canvas.toBuffer("image/png");
     res.setHeader("Content-Type", "image/png");
-    res.send(canvas.toBuffer());
+    res.send(buffer);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
