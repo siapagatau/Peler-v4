@@ -17,7 +17,7 @@ const os = require("os");
 ffmpeg.setFfmpegPath(ffmpegPath);
 Font.loadDefault();
 
-// ---------- Custom Greetings Card (diperbaiki) ----------
+// ---------- Custom Greetings Card (semua div punya display eksplisit) ----------
 class GreetingsCard extends Builder {
   constructor() {
     super(930, 280);
@@ -36,7 +36,7 @@ class GreetingsCard extends Builder {
   async render() {
     const { type, displayName, avatar, message } = this.options.getOptions();
     const image = await loadImage(avatar || "https://cdn.discordapp.com/embed/avatars/0.png");
-    // Semua div dengan >1 child wajib punya display:flex
+    
     return JSX.createElement(
       "div",
       {
@@ -119,58 +119,7 @@ class GreetingsCard extends Builder {
   }
 }
 
-// ---------- Helper components untuk ProfileCard (semua sudah punya display) ----------
-function _statBlock(value, label) {
-  return JSX.createElement(
-    "div",
-    {
-      style: {
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        flex: "1",
-      },
-    },
-    JSX.createElement(
-      "span",
-      {
-        style: {
-          fontSize: "22px",
-          fontWeight: "800",
-          color: "#ffffff",
-          letterSpacing: "-0.5px",
-        },
-      },
-      String(value || "0")
-    ),
-    JSX.createElement(
-      "span",
-      {
-        style: {
-          fontSize: "11px",
-          color: "rgba(255,255,255,0.55)",
-          fontWeight: "600",
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          marginTop: "3px",
-        },
-      },
-      String(label || "")
-    )
-  );
-}
-
-function _divider() {
-  return JSX.createElement("div", {
-    style: {
-      width: "1px",
-      height: "38px",
-      background: "rgba(255,255,255,0.18)",
-    },
-  });
-}
-
-// ---------- Profile Card (diperbaiki) ----------
+// ---------- Profile Card (stats section ditulis eksplisit, tanpa helper) ----------
 class ProfileCard extends Builder {
   constructor() {
     super(960, 540);
@@ -217,7 +166,6 @@ class ProfileCard extends Builder {
     const avatarImg = await loadImage(
       avatar || "https://cdn.discordapp.com/embed/avatars/0.png"
     );
-
     const accentColor = `#${(accent || "6366f1").replace("#", "")}`;
 
     // Avatar dengan ring (2 children -> display:flex)
@@ -259,7 +207,7 @@ class ProfileCard extends Builder {
       })
     );
 
-    // Info panel (2 atau 3 children -> display:flex column)
+    // Info panel (dynamic children count, tetap display:flex column)
     const infoChildren = [
       JSX.createElement(
         "div",
@@ -320,7 +268,8 @@ class ProfileCard extends Builder {
       ...infoChildren
     );
 
-    // Stats row (5 children -> display:flex row)
+    // ========== STATS SECTION - DITULIS EKSPLISIT, TANPA HELPER ==========
+    // Setiap blok stat punya display:flex column, dan seluruh baris juga display:flex row
     const statsEl = JSX.createElement(
       "div",
       {
@@ -337,14 +286,139 @@ class ProfileCard extends Builder {
           paddingTop: "12px",
         },
       },
-      _statBlock(statValue1, statLabel1),
-      _divider(),
-      _statBlock(statValue2, statLabel2),
-      _divider(),
-      _statBlock(statValue3, statLabel3)
+      // Stat 1
+      JSX.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            flex: "1",
+          },
+        },
+        JSX.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "22px",
+              fontWeight: "800",
+              color: "#ffffff",
+              letterSpacing: "-0.5px",
+            },
+          },
+          String(statValue1 || "0")
+        ),
+        JSX.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "11px",
+              color: "rgba(255,255,255,0.55)",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginTop: "3px",
+            },
+          },
+          String(statLabel1 || "")
+        )
+      ),
+      // Divider 1
+      JSX.createElement("div", {
+        style: {
+          width: "1px",
+          height: "38px",
+          background: "rgba(255,255,255,0.18)",
+        },
+      }),
+      // Stat 2
+      JSX.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            flex: "1",
+          },
+        },
+        JSX.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "22px",
+              fontWeight: "800",
+              color: "#ffffff",
+              letterSpacing: "-0.5px",
+            },
+          },
+          String(statValue2 || "0")
+        ),
+        JSX.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "11px",
+              color: "rgba(255,255,255,0.55)",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginTop: "3px",
+            },
+          },
+          String(statLabel2 || "")
+        )
+      ),
+      // Divider 2
+      JSX.createElement("div", {
+        style: {
+          width: "1px",
+          height: "38px",
+          background: "rgba(255,255,255,0.18)",
+        },
+      }),
+      // Stat 3
+      JSX.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            flex: "1",
+          },
+        },
+        JSX.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "22px",
+              fontWeight: "800",
+              color: "#ffffff",
+              letterSpacing: "-0.5px",
+            },
+          },
+          String(statValue3 || "0")
+        ),
+        JSX.createElement(
+          "span",
+          {
+            style: {
+              fontSize: "11px",
+              color: "rgba(255,255,255,0.55)",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginTop: "3px",
+            },
+          },
+          String(statLabel3 || "")
+        )
+      )
     );
 
-    // Background layer
+    // Background dan overlay
     const bgEl = background
       ? JSX.createElement("img", {
           src: background,
@@ -433,7 +507,6 @@ class ProfileCard extends Builder {
       );
     }
 
-    // Root harus display:flex karena banyak children
     return JSX.createElement(
       "div",
       {
@@ -451,7 +524,7 @@ class ProfileCard extends Builder {
   }
 }
 
-// ---------- Helpers (tidak berubah) ----------
+// ---------- Helpers (convert, compress, tidak berubah) ----------
 function setCorsHeaders(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
