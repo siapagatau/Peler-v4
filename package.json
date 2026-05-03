@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "canvacord": "latest",
+    "@napi-rs/canvas": "latest",
     "canvas": "latest",
     "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.2",
