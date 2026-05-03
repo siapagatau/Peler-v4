@@ -64,6 +64,60 @@ class GreetingsCard extends Builder {
 }
 
 // ---------- Profile Card ----------
+// PENTING: canvacord JSX mengharuskan setiap <div> yang memiliki lebih dari
+// 1 child node harus punya explicit style display: flex/contents/none.
+// Kita pakai display:flex + position:absolute pada children untuk efek layering.
+
+function _statBlock(value, label) {
+  return JSX.createElement(
+    "div",
+    {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        flex: "1",
+      },
+    },
+    JSX.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "22px",
+          fontWeight: "800",
+          color: "#ffffff",
+          letterSpacing: "-0.5px",
+        },
+      },
+      String(value || "0")
+    ),
+    JSX.createElement(
+      "span",
+      {
+        style: {
+          fontSize: "11px",
+          color: "rgba(255,255,255,0.55)",
+          fontWeight: "600",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          marginTop: "3px",
+        },
+      },
+      String(label || "")
+    )
+  );
+}
+
+function _divider() {
+  return JSX.createElement("div", {
+    style: {
+      width: "1px",
+      height: "38px",
+      background: "rgba(255,255,255,0.18)",
+    },
+  });
+}
+
 class ProfileCard extends Builder {
   constructor() {
     super(960, 540);
@@ -111,233 +165,239 @@ class ProfileCard extends Builder {
       avatar || "https://cdn.discordapp.com/embed/avatars/0.png"
     );
 
-    const accentColor = `#${accent || "6366f1"}`;
+    const accentColor = `#${(accent || "6366f1").replace("#", "")}`;
 
-    return JSX.createElement(
+    // ── Avatar: display flex agar ring + foto valid sebagai 2 children ──
+    const avatarEl = JSX.createElement(
       "div",
-      { className: "relative w-full h-full overflow-hidden" },
-
-      // Background image or gradient fallback
-      background
-        ? JSX.createElement("img", {
-            src: background,
-            className: "absolute inset-0 w-full h-full",
-            style: { objectFit: "cover", objectPosition: "center" },
-          })
-        : JSX.createElement("div", {
-            className: "absolute inset-0 w-full h-full",
-            style: {
-              background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-            },
-          }),
-
-      // Gradient overlay (darken bottom for readability)
-      JSX.createElement("div", {
-        className: "absolute inset-0 w-full h-full",
+      {
         style: {
-          background: "linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.70) 100%)",
+          display: "flex",
+          position: "absolute",
+          left: "52px",
+          bottom: "168px",
+          width: "140px",
+          height: "140px",
+        },
+      },
+      JSX.createElement("div", {
+        style: {
+          position: "absolute",
+          top: "-4px",
+          left: "-4px",
+          width: "148px",
+          height: "148px",
+          borderRadius: "50%",
+          background: `linear-gradient(135deg, ${accentColor}, rgba(255,255,255,0.12), ${accentColor})`,
         },
       }),
-
-      // Accent left stripe
-      JSX.createElement("div", {
-        className: "absolute left-0 top-0 h-full",
+      JSX.createElement("img", {
+        src: avatarImg.toDataURL(),
         style: {
-          width: "5px",
-          background: `linear-gradient(to bottom, ${accentColor}, transparent)`,
+          position: "absolute",
+          top: "4px",
+          left: "4px",
+          width: "132px",
+          height: "132px",
+          borderRadius: "50%",
+          objectFit: "cover",
+          objectPosition: "center top",
         },
-      }),
+      })
+    );
 
-      // Glass panel bottom
-      JSX.createElement("div", {
-        className: "absolute bottom-0 left-0 w-full",
-        style: {
-          height: "240px",
-          background: "rgba(255,255,255,0.10)",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
-          borderTop: "2px solid rgba(255,255,255,0.18)",
-          borderRadius: "28px 28px 0 0",
-        },
-      }),
-
-      // Avatar ring + image
+    // ── Info panel: nama + username (selalu 2 child) ──
+    const infoDivChildren = [
       JSX.createElement(
         "div",
         {
-          className: "absolute",
-          style: { left: "52px", bottom: "172px", width: "140px", height: "140px" },
-        },
-        JSX.createElement("div", {
           style: {
-            position: "absolute",
-            inset: "-4px",
-            borderRadius: "50%",
-            background: `linear-gradient(135deg, ${accentColor}, rgba(255,255,255,0.1), ${accentColor})`,
+            fontSize: "28px",
+            fontWeight: "800",
+            color: "#ffffff",
+            lineHeight: "1.1",
+            letterSpacing: "-0.5px",
           },
-        }),
-        JSX.createElement("img", {
-          src: avatarImg.toDataURL(),
+        },
+        String(name || "Nama Pengguna")
+      ),
+      JSX.createElement(
+        "div",
+        {
+          style: {
+            fontSize: "14px",
+            color: accentColor,
+            fontWeight: "600",
+            marginTop: "4px",
+            letterSpacing: "0.02em",
+          },
+        },
+        username ? `@${username}` : "\u00a0"
+      ),
+    ];
+
+    if (bio) {
+      infoDivChildren.push(
+        JSX.createElement(
+          "div",
+          {
+            style: {
+              fontSize: "12px",
+              color: "rgba(255,255,255,0.68)",
+              marginTop: "6px",
+              lineHeight: "1.5",
+            },
+          },
+          String(bio)
+        )
+      );
+    }
+
+    const infoEl = JSX.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          position: "absolute",
+          left: "214px",
+          bottom: "100px",
+          right: "36px",
+        },
+      },
+      ...infoDivChildren
+    );
+
+    // ── Stats row: 5 children (3 blok + 2 divider) ──
+    const statsEl = JSX.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-around",
+          position: "absolute",
+          left: "52px",
+          right: "52px",
+          bottom: "20px",
+          borderTop: "1px solid rgba(255,255,255,0.14)",
+          paddingTop: "12px",
+        },
+      },
+      _statBlock(statValue1, statLabel1),
+      _divider(),
+      _statBlock(statValue2, statLabel2),
+      _divider(),
+      _statBlock(statValue3, statLabel3)
+    );
+
+    // ── Background layer ──
+    const bgEl = background
+      ? JSX.createElement("img", {
+          src: background,
           style: {
             position: "absolute",
-            inset: "4px",
-            borderRadius: "50%",
-            width: "calc(100% - 8px)",
-            height: "calc(100% - 8px)",
+            top: "0px",
+            left: "0px",
+            width: "960px",
+            height: "540px",
             objectFit: "cover",
             objectPosition: "center",
           },
         })
-      ),
-
-      // Badge
-      badge
-        ? JSX.createElement(
-            "div",
-            {
-              className: "absolute",
-              style: {
-                left: "52px",
-                bottom: "158px",
-                background: accentColor,
-                color: "#fff",
-                fontSize: "11px",
-                fontWeight: "700",
-                padding: "2px 10px",
-                borderRadius: "99px",
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
-              },
-            },
-            badge
-          )
-        : null,
-
-      // Name, username, bio
-      JSX.createElement(
-        "div",
-        {
-          className: "absolute",
-          style: { left: "212px", bottom: "105px", right: "36px" },
-        },
-        JSX.createElement(
-          "div",
-          {
-            style: {
-              fontSize: "30px",
-              fontWeight: "800",
-              color: "#ffffff",
-              textShadow: "0 2px 12px rgba(0,0,0,0.5)",
-              lineHeight: "1.1",
-              letterSpacing: "-0.5px",
-            },
-          },
-          name || "Nama Pengguna"
-        ),
-        JSX.createElement(
-          "div",
-          {
-            style: {
-              fontSize: "15px",
-              color: accentColor,
-              fontWeight: "600",
-              marginTop: "4px",
-              letterSpacing: "0.02em",
-            },
-          },
-          username ? `@${username}` : ""
-        ),
-        bio
-          ? JSX.createElement(
-              "div",
-              {
-                style: {
-                  fontSize: "13px",
-                  color: "rgba(255,255,255,0.70)",
-                  marginTop: "6px",
-                  lineHeight: "1.45",
-                },
-              },
-              bio
-            )
-          : null
-      ),
-
-      // Stats row
-      JSX.createElement(
-        "div",
-        {
-          className: "absolute",
+      : JSX.createElement("div", {
           style: {
-            left: "52px",
-            right: "52px",
-            bottom: "22px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-around",
-            borderTop: "1px solid rgba(255,255,255,0.15)",
-            paddingTop: "14px",
+            position: "absolute",
+            top: "0px",
+            left: "0px",
+            width: "960px",
+            height: "540px",
+            background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
           },
+        });
+
+    const overlayEl = JSX.createElement("div", {
+      style: {
+        position: "absolute",
+        top: "0px",
+        left: "0px",
+        width: "960px",
+        height: "540px",
+        background: "linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.72) 100%)",
+      },
+    });
+
+    const stripeEl = JSX.createElement("div", {
+      style: {
+        position: "absolute",
+        top: "0px",
+        left: "0px",
+        width: "5px",
+        height: "540px",
+        background: `linear-gradient(to bottom, ${accentColor}, rgba(0,0,0,0))`,
+      },
+    });
+
+    const panelEl = JSX.createElement("div", {
+      style: {
+        position: "absolute",
+        bottom: "0px",
+        left: "0px",
+        width: "960px",
+        height: "240px",
+        background: "rgba(0,0,0,0.38)",
+        borderTop: "1.5px solid rgba(255,255,255,0.14)",
+        borderRadius: "24px 24px 0 0",
+      },
+    });
+
+    // Kumpulkan semua children, badge hanya ditambah jika ada
+    const rootChildren = [bgEl, overlayEl, stripeEl, panelEl, avatarEl, infoEl, statsEl];
+
+    if (badge) {
+      rootChildren.push(
+        JSX.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              position: "absolute",
+              left: "52px",
+              bottom: "152px",
+              background: accentColor,
+              color: "#ffffff",
+              fontSize: "10px",
+              fontWeight: "700",
+              padding: "2px 10px",
+              borderRadius: "99px",
+              letterSpacing: "0.07em",
+              textTransform: "uppercase",
+            },
+          },
+          String(badge)
+        )
+      );
+    }
+
+    // Root harus display: flex karena punya banyak children
+    return JSX.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          position: "relative",
+          width: "960px",
+          height: "540px",
+          overflow: "hidden",
+          borderRadius: "16px",
         },
-        _statBlock(statValue1, statLabel1),
-        _divider(),
-        _statBlock(statValue2, statLabel2),
-        _divider(),
-        _statBlock(statValue3, statLabel3)
-      )
+      },
+      ...rootChildren
     );
   }
-}
-
-function _statBlock(value, label) {
-  return JSX.createElement(
-    "div",
-    {
-      style: {
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "2px",
-        flex: "1",
-      },
-    },
-    JSX.createElement(
-      "span",
-      {
-        style: {
-          fontSize: "22px",
-          fontWeight: "800",
-          color: "#ffffff",
-          letterSpacing: "-0.5px",
-        },
-      },
-      value || "0"
-    ),
-    JSX.createElement(
-      "span",
-      {
-        style: {
-          fontSize: "11px",
-          color: "rgba(255,255,255,0.55)",
-          fontWeight: "600",
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-        },
-      },
-      label || ""
-    )
-  );
-}
-
-function _divider() {
-  return JSX.createElement("div", {
-    style: {
-      width: "1px",
-      height: "40px",
-      background: "rgba(255,255,255,0.15)",
-    },
-  });
 }
 
 // ---------- Helpers ----------
@@ -349,15 +409,8 @@ function setCorsHeaders(res) {
 
 /**
  * Jalankan satu kali konversi WebP animated dengan opsi tertentu.
- * @param {Stream} inputStream
- * @param {object} opts
- * @param {number} opts.quality - 0–100
- * @param {number} opts.fps     - frame per second (0 = ikuti asli)
- * @param {number} opts.width   - lebar output px (0 = gunakan 512x512 default)
- * @returns {Promise<Buffer>}
  */
 function _runConvertToWebP(inputBuffer, { quality, fps = 0, width = 0 }) {
-  // Tulis buffer ke tmp file agar FFmpeg bisa baca WebP animated dengan benar
   const tmpIn  = path.join(os.tmpdir(), `conv_in_${Date.now()}_${Math.random().toString(36).slice(2)}.webp`);
   const tmpOut = path.join(os.tmpdir(), `conv_out_${Date.now()}_${Math.random().toString(36).slice(2)}.webp`);
   fs.writeFileSync(tmpIn, inputBuffer);
@@ -401,29 +454,13 @@ function _runConvertToWebP(inputBuffer, { quality, fps = 0, width = 0 }) {
   });
 }
 
-/**
- * Konversi URL → animated WebP, auto-kecilkan jika hasil > maxSize (default 1MB).
- *
- * Urutan strategi (ringan → agresif):
- *   Tahap 1 – turunkan FPS saja : 0 (asli) → 24 → 20 → 15 → 12 → 10 → 8 → 6 → 5 → 3 → 2 → 1
- *
- * Loop berhenti segera saat buffer ≤ maxSize.
- * Jika FFmpeg gagal atau semua opsi habis → kembalikan buffer ASLI (tidak dikonversi).
- *
- * @param {string} url
- * @param {number} quality  - kualitas awal (0–100), default 80
- * @param {number} maxSize  - batas bytes, default 1 MB
- * @returns {Promise<{ buffer: Buffer, contentType: string, isOriginal: boolean }>}
- */
 async function convertToWebP(url, quality = 80, maxSize = 1 * 1024 * 1024) {
-  // Download buffer asli SEKALI sebagai sumber + fallback
   const originalResponse = await axios({ method: "GET", url, responseType: "arraybuffer" });
   const originalBuffer   = Buffer.from(originalResponse.data);
   const originalType     = originalResponse.headers["content-type"] || "application/octet-stream";
 
   console.log(`[convert] Original: ${(originalBuffer.length / 1024 / 1024).toFixed(2)}MB type=${originalType}`);
 
-  // Coba dari fps asli (0), lalu turunkan bertahap sampai muat
   for (const fps of [0, 24, 20, 15, 12, 10, 8, 6, 5, 3, 2, 1]) {
     try {
       const buf = await _runConvertToWebP(originalBuffer, { quality, fps, width: 0 });
@@ -441,41 +478,23 @@ async function convertToWebP(url, quality = 80, maxSize = 1 * 1024 * 1024) {
     }
   }
 
-  // Semua opsi habis → kembalikan buffer asli tanpa konversi
-  console.warn(
-    `[convert] ⚠️ Semua opsi fps habis, mengembalikan buffer asli.` +
-    ` Ukuran asli: ${(originalBuffer.length / 1024 / 1024).toFixed(2)}MB` +
-    ` (limit: ${(maxSize / 1024 / 1024).toFixed(2)}MB)`
-  );
+  console.warn(`[convert] ⚠️ Semua opsi fps habis, mengembalikan buffer asli.`);
   return { buffer: originalBuffer, contentType: originalType, isOriginal: true };
 }
 
-/**
- * Kompres gambar ke JPEG/WebP max 100KB tanpa stretch.
- * Aspect ratio dipertahankan, resolusi diturunkan jika perlu.
- * @param {string} url     - URL gambar
- * @param {number} maxSize - Batas ukuran dalam bytes (default: 100KB)
- * @returns {Promise<Buffer>}
- */
 async function compressImage(url, maxSize = 100 * 1024) {
   const response = await axios({ method: "GET", url, responseType: "stream" });
-
-  // Tahap 1: coba quality tinggi dulu, turunkan bertahap sampai muat
   const qualities = [80, 65, 50, 35, 20];
 
   for (const quality of qualities) {
     const result = await _runCompress(response.data.pipe(new PassThrough()), quality);
     if (result.length <= maxSize) return result;
-
-    // response.data sudah dipakai, harus fetch ulang untuk iterasi berikutnya
     if (quality !== qualities[qualities.length - 1]) {
       const retry = await axios({ method: "GET", url, responseType: "stream" });
       response.data = retry.data;
     }
   }
 
-  // Tahap 2: jika masih > maxSize setelah quality terkecil,
-  // turunkan resolusi (scale down) sambil tetap jaga aspect ratio
   const scales = [0.75, 0.5, 0.35, 0.25];
   for (const scale of scales) {
     const retry = await axios({ method: "GET", url, responseType: "stream" });
@@ -483,25 +502,17 @@ async function compressImage(url, maxSize = 100 * 1024) {
     if (result.length <= maxSize) return result;
   }
 
-  // Kembalikan hasil terkecil yang bisa dihasilkan (scale 0.25 + quality 20)
   const last = await axios({ method: "GET", url, responseType: "stream" });
   return _runCompress(last.data, 20, 0.25);
 }
 
-/**
- * Internal: jalankan satu kali ffmpeg compress
- * @param {Stream} inputStream
- * @param {number} quality   - 0-100
- * @param {number|null} scale - misal 0.5 = setengah resolusi asli, null = tidak resize
- */
 function _runCompress(inputStream, quality, scale = null) {
   const outputStream = new PassThrough();
   const chunks = [];
 
-  // scale=iw*{scale}:ih*{scale} → proportional, tidak stretch
   const scaleFilter = scale
     ? `scale=iw*${scale}:ih*${scale}:flags=lanczos`
-    : "scale=iw:ih:flags=lanczos"; // no-op tapi tetap jaga pixel format
+    : "scale=iw:ih:flags=lanczos";
 
   return new Promise((resolve, reject) => {
     outputStream.on("data", (chunk) => chunks.push(chunk));
@@ -512,12 +523,12 @@ function _runCompress(inputStream, quality, scale = null) {
       .inputOptions(["-analyzeduration 10M", "-probesize 10M"])
       .videoFilter(scaleFilter)
       .outputOptions([
-        "-c:v libwebp",   // WebP lebih efisien dari JPEG untuk ukuran kecil
+        "-c:v libwebp",
         `-quality ${quality}`,
         "-loop 0",
         "-preset picture",
         "-an",
-        "-vframes 1",     // ambil 1 frame saja (untuk GIF/video → ambil frame pertama)
+        "-vframes 1",
       ])
       .format("webp")
       .on("error", (err) => reject(new Error(`FFmpeg compress error: ${err.message}`)))
@@ -549,7 +560,6 @@ module.exports = async (req, res) => {
     if (q < 0 || q > 100)
       return res.status(400).json({ error: "Quality harus antara 0-100." });
 
-    // maxsize opsional (bytes), default 1MB
     const maxBytes = parseInt(maxsize) || 1 * 1024 * 1024;
     if (maxBytes < 1024 || maxBytes > 50 * 1024 * 1024)
       return res.status(400).json({ error: "maxsize harus antara 1024 (1KB) hingga 52428800 (50MB)." });
@@ -580,7 +590,6 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "URL tidak valid." });
     }
 
-    // maxsize opsional (bytes), default 100KB
     const maxBytes = parseInt(maxsize) || 100 * 1024;
     if (maxBytes < 1024 || maxBytes > 10 * 1024 * 1024)
       return res.status(400).json({ error: "maxsize harus antara 1024 (1KB) hingga 10485760 (10MB)." });
@@ -631,7 +640,7 @@ module.exports = async (req, res) => {
     }
   }
 
-  // --- RANK / WELCOME / GOODBYE ---
+  // --- RANK / WELCOME / GOODBYE / PROFILE ---
   if (req.method !== "GET")
     return res.status(405).json({ error: "Method not allowed." });
 
