@@ -1,20 +1,19 @@
-const { createCanvas, loadImage, Font } = require("canvacord");
+const { loadImage, Font } = require("canvacord");
+const { createCanvas } = require("canvas"); // ← instal canvas
 
 Font.loadDefault();
 
 module.exports = async (req, res) => {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   const { type } = req.query;
   if (type !== "profile") {
-    return res.status(400).json({ error: "Hanya mendukung type=profile" });
+    return res.status(400).json({ error: 'Hanya mendukung type="profile"' });
   }
 
   try {
-    // Ambil parameter dari query string
     const {
       name = "Pengguna",
       username = "",
@@ -35,7 +34,7 @@ module.exports = async (req, res) => {
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
-    // --- Background (gambar atau warna solid) ---
+    // Background (gambar atau solid)
     if (background) {
       try {
         const bg = await loadImage(background);
@@ -49,11 +48,11 @@ module.exports = async (req, res) => {
       ctx.fillRect(0, 0, width, height);
     }
 
-    // Overlay gelap agar teks mudah dibaca
+    // Overlay gelap
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, 0, width, height);
 
-    // --- Avatar bulat ---
+    // Avatar bulat
     let avatarImg;
     try {
       avatarImg = await loadImage(avatar);
@@ -71,19 +70,19 @@ module.exports = async (req, res) => {
     ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
     ctx.restore();
 
-    // --- Nama ---
+    // Nama
     ctx.font = "bold 28px 'Whitney', 'Roboto'";
     ctx.fillStyle = "#FFFFFF";
     ctx.fillText(name, avatarX + avatarSize + 20, avatarY + 35);
 
-    // --- Username (opsional) ---
+    // Username
     if (username) {
       ctx.font = "18px 'Whitney', 'Roboto'";
       ctx.fillStyle = "#B9BBBE";
       ctx.fillText(`@${username}`, avatarX + avatarSize + 20, avatarY + 70);
     }
 
-    // --- Bio (opsional) ---
+    // Bio
     if (bio) {
       ctx.font = "15px 'Whitney', 'Roboto'";
       ctx.fillStyle = "#DCDDDE";
@@ -91,7 +90,7 @@ module.exports = async (req, res) => {
       ctx.fillText(bioText, avatarX + avatarSize + 20, avatarY + 105);
     }
 
-    // --- Statistik (3 kolom) ---
+    // Statistik
     const statsY = height - 80;
     const statWidth = (width - 80) / 3;
     const statXStart = 40;
@@ -117,7 +116,7 @@ module.exports = async (req, res) => {
     }
     ctx.textAlign = "left";
 
-    // --- Garis pemisah di atas statistik ---
+    // Garis aksen
     ctx.beginPath();
     ctx.moveTo(40, height - 110);
     ctx.lineTo(width - 40, height - 110);
@@ -125,11 +124,10 @@ module.exports = async (req, res) => {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // --- Strip aksen di sisi kiri ---
+    // Strip aksen di kiri
     ctx.fillStyle = accent;
     ctx.fillRect(0, 0, 8, height);
 
-    // Kirim hasil
     res.setHeader("Content-Type", "image/png");
     res.send(canvas.toBuffer());
   } catch (err) {
