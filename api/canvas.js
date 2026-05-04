@@ -1,195 +1,154 @@
 const { createCanvas, loadImage } = require("@napi-rs/canvas");
 
 module.exports = async (req, res) => {
+  // Header CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
-  const { type } = req.query;
-  if (type !== "profile") {
-    return res.status(400).json({ error: 'Hanya mendukung type="profile"' });
-  }
+  // Parameter yang dibutuhkan
+  const {
+    name = "Pengguna",
+    avatar = "https://cdn.discordapp.com/embed/avatars/0.png",
+    background = "",
+    uang = "0",
+    limit = "0",
+    rank = "bronze",
+    accent = "f97316",    // warna aksen hex (tanpa #)
+  } = req.query;
 
   try {
-    const {
-      name = "Pengguna",
-      avatar = "https://cdn.discordapp.com/embed/avatars/0.png",
-      background = "",
-      uang = "Rp 0",
-      limit = "100",
-      rank = "#1",
-      badge = "Member"
-    } = req.query;
-
-    const width = 900;
-    const height = 340;
+    const width = 800;
+    const height = 450;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
-    // 1. Background solid putih dulu (biar teks keliatan jelas)
-    ctx.fillStyle = "#ffffff";
+    // --- 1. BACKGROUND GRADIENT (soft & colorful) ---
+    const grad = ctx.createLinearGradient(0, 0, width*0.8, height);
+    grad.addColorStop(0, `#${accent}80`);       // aksen 50%
+    grad.addColorStop(0.5, "#1e1a4dcc");        // ungu gelap
+    grad.addColorStop(1, "#0f172acc");           // biru gelap
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Background image opsional (sangat transparan)
+    // --- 2. OVERLAY BLUR (efek glassmorphism) ---
+    ctx.fillStyle = "rgba(255,255,240,0.08)";
+    ctx.fillRect(0, 0, width, height);
+
+    // --- 3. BACKGROUND GAMBAR (jika ada) ---
     if (background) {
       try {
-        const bg = await loadImage(background);
-        ctx.globalAlpha = 0.1;
-        ctx.drawImage(bg, 0, 0, width, height);
+        const bgImg = await loadImage(background);
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.drawImage(bgImg, 0, 0, width, height);
         ctx.globalAlpha = 1;
-      } catch {}
+        ctx.restore();
+      } catch (error) {
+        console.warn("Gagal muat background:", error.message);
+      }
     }
 
-    // 3. Background gradien pastel
-    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0, "#fce4f3");
-    bgGrad.addColorStop(0.5, "#e8d5f5");
-    bgGrad.addColorStop(1, "#d0e8ff");
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, width, height);
-
-    // 4. Panel putih transparan (frosted)
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    roundRect(ctx, 20, 20, width - 40, height - 40, 25);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
-    ctx.lineWidth = 2;
-    roundRect(ctx, 20, 20, width - 40, height - 40, 25);
-    ctx.stroke();
-
-    // 5. Avatar
-    const avatarSize = 110;
-    const avatarX = 55;
-    const avatarY = (height - avatarSize) / 2;
-    const centerX = avatarX + avatarSize/2;
-    const centerY = avatarY + avatarSize/2;
-
-    // Lingkaran putih di belakang avatar
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, avatarSize/2 + 5, 0, Math.PI*2);
-    ctx.fillStyle = "white";
-    ctx.fill();
-
-    // Avatar image
+    // --- 4. AVATAR BULAT (shadow & glow) ---
     let avatarImg;
     try {
       avatarImg = await loadImage(avatar);
     } catch {
       avatarImg = await loadImage("https://cdn.discordapp.com/embed/avatars/0.png");
     }
-    ctx.save();
+    const avatarSize = 120;
+    const avatarX = 50;
+    const avatarY = 70;
+    
+    // shadow
+    ctx.shadowColor = `rgba(0,0,0,0.3)`;
+    ctx.shadowBlur = 15;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, avatarSize/2, 0, Math.PI*2);
+    ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, Math.PI*2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // clip & gambar
+    ctx.beginPath();
+    ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, Math.PI*2);
+    ctx.closePath();
     ctx.clip();
     ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
-    ctx.restore();
+    ctx.restore();  // restore clip
 
-    // 6. Ring warna di avatar
-    const ringColors = ["#FF8FAB", "#A78BFA", "#60CDFF"];
-    for (let i = 0; i < 3; i++) {
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, avatarSize/2 + 8, 
-        (i * 2 * Math.PI) / 3 - Math.PI/2,
-        ((i+1) * 2 * Math.PI) / 3 - Math.PI/2
-      );
-      ctx.strokeStyle = ringColors[i];
-      ctx.lineWidth = 5;
-      ctx.stroke();
-    }
-
-    // ================ TEKS ================
-    // Reset semua properti yang bisa mengganggu teks
+    // --- 5. NAMA & RANK BADGE (glow text opsional) ---
+    ctx.font = "bold 32px 'Segoe UI', 'Whitney', 'Poppins'";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.fillText(name, avatarX + avatarSize + 25, avatarY + 45);
     ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
-    ctx.textBaseline = "top";
-    ctx.textAlign = "left";
     
-    const textX = avatarX + avatarSize + 35;
+    // rank badge (warna sesuai rank)
+    let rankColor = "#facc15"; // gold default
+    if (rank === "bronze") rankColor = "#cd7f32";
+    if (rank === "silver") rankColor = "#c0c0c0";
+    if (rank === "gold") rankColor = "#facc15";
+    if (rank === "platinum") rankColor = "#b0c4de";
+    ctx.font = "bold 16px 'Segoe UI'";
+    ctx.fillStyle = rankColor;
+    ctx.fillText(`🏆 ${rank.toUpperCase()}`, avatarX + avatarSize + 25, avatarY + 90);
 
-    // Badge
-    const badgeText = badge.toUpperCase();
-    ctx.font = "bold 13px Arial, sans-serif";
-    const badgeWidth = ctx.measureText(badgeText).width + 24;
-    const badgeHeight = 26;
-    const badgeY = 50;
-    ctx.fillStyle = "#C4B5FD";
-    roundRect(ctx, textX, badgeY, badgeWidth, badgeHeight, 13);
-    ctx.fill();
-    ctx.fillStyle = "#3d2260";
-    ctx.fillText(badgeText, textX + 12, badgeY + 8);
-
-    // Nama user
-    ctx.font = "bold 38px Arial, sans-serif";
-    ctx.fillStyle = "#2c1a4a";
-    ctx.fillText(name, textX, badgeY + 42);
-
-    // Garis dekorasi
-    ctx.beginPath();
-    ctx.moveTo(textX, badgeY + 82);
-    ctx.lineTo(textX + 200, badgeY + 82);
-    ctx.strokeStyle = "#d9c8f2";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Stat cards
+    // --- 6. STATISTIK (Uang, Limit, Rank) - card terpisah ---
     const stats = [
-      { label: "Uang", value: uang, color: "#FFB3C8" },
-      { label: "Limit", value: limit, color: "#C4B5FD" },
-      { label: "Rank", value: rank, color: "#93E0FF" }
+      { label: "💰 Uang", value: formatNumber(uang) },
+      { label: "⏱️ Limit", value: formatNumber(limit) },
+      { label: "⭐ Rank", value: rank.toUpperCase() }
     ];
-    const cardY = badgeY + 100;
-    const cardWidth = (width - textX - 60) / 3 - 10;
-    const cardHeight = 70;
-
+    
+    const cardWidth = 200;
+    const cardHeight = 80;
+    const startX = 50;
+    const startY = height - 120;
+    const gap = (width - (cardWidth * 3) - 100) / 2;
+    
     for (let i = 0; i < stats.length; i++) {
-      const cardX = textX + i * (cardWidth + 12);
+      const x = startX + i * (cardWidth + gap);
+      const y = startY;
       
-      // Background card
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      roundRect(ctx, cardX, cardY, cardWidth, cardHeight, 15);
-      ctx.fill();
-      
-      // Border
-      ctx.strokeStyle = stats[i].color;
-      ctx.lineWidth = 2.5;
-      roundRect(ctx, cardX, cardY, cardWidth, cardHeight, 15);
-      ctx.stroke();
-      
-      // Value
-      ctx.font = "bold 22px Arial, sans-serif";
-      ctx.fillStyle = "#2c1a4a";
-      ctx.textAlign = "center";
-      ctx.fillText(stats[i].value, cardX + cardWidth/2, cardY + 28);
-      
-      // Label
-      ctx.font = "12px Arial, sans-serif";
-      ctx.fillStyle = "#6b4e8a";
-      ctx.fillText(stats[i].label, cardX + cardWidth/2, cardY + 55);
+      // card background (glassmorph)
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = "rgba(0,0,0,0.2)";
+      ctx.fillRect(x, y, cardWidth, cardHeight);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 20px 'Segoe UI'";
+      ctx.fillText(stats[i].value, x + 25, y + 40);
+      ctx.font = "14px 'Segoe UI'";
+      ctx.fillStyle = "#dddddd";
+      ctx.fillText(stats[i].label, x + 25, y + 70);
     }
+    ctx.shadowBlur = 0;
 
-    // Reset alignment
-    ctx.textAlign = "left";
+    // --- 7. GARIS AKSEN (soft glow) ---
+    ctx.beginPath();
+    ctx.moveTo(30, height - 150);
+    ctx.lineTo(width - 30, height - 150);
+    ctx.strokeStyle = `#${accent}`;
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = `#${accent}`;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
 
+    // --- 8. OUTPUT ---
     const buffer = canvas.toBuffer("image/png");
     res.setHeader("Content-Type", "image/png");
     res.send(buffer);
-
+    
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
   }
 };
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
+// Helper format angka ribuan
+function formatNumber(num) {
+  return parseInt(num).toLocaleString('id-ID');
 }
