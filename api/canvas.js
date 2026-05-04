@@ -26,12 +26,15 @@ module.exports = async (req, res) => {
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
+    // Reset text baseline (paling penting agar teks muncul di posisi yang benar)
+    ctx.textBaseline = "top";
+
     // ─── BACKGROUND GRADIENT PASTEL ───────────────────────────────
     const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0,   "#fce4f3");
+    bgGrad.addColorStop(0, "#fce4f3");
     bgGrad.addColorStop(0.4, "#e8d5f5");
     bgGrad.addColorStop(0.7, "#d0e8ff");
-    bgGrad.addColorStop(1,   "#c8f0e8");
+    bgGrad.addColorStop(1, "#c8f0e8");
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
@@ -126,12 +129,19 @@ module.exports = async (req, res) => {
     ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
     ctx.restore();
 
-    // ─── KONTEN TEKS ──────────────────────────────────────────────
+    // ─── KONTEN TEKS (DIPERBAIKI) ─────────────────────────────────
     const textX = avatarX + avatarSize + 38;
     const badgeText = (badge || "Member").toUpperCase();
 
+    // Reset shadow sebelum teks (penting!)
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+
     // Badge pill
-    ctx.font = "bold 11px sans-serif";
+    ctx.font = "bold 11px 'Segoe UI', sans-serif";
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+
     const bPad = 11;
     const bW = ctx.measureText(badgeText).width + bPad * 2;
     const bH = 23;
@@ -144,26 +154,20 @@ module.exports = async (req, res) => {
     roundRect(ctx, textX, bY, bW, bH, 12);
     ctx.fill();
 
-    ctx.fillStyle = "#fff";
-    ctx.textAlign = "left";
-    ctx.shadowColor = "rgba(0,0,0,0.1)";
-    ctx.shadowBlur = 2;
-    ctx.fillText(badgeText, textX + bPad, bY + 16);
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(badgeText, textX + bPad, bY + 6); // baseline top -> +6 untuk centering vertikal
 
     // Nama
-    ctx.font = "bold 38px sans-serif";
-    ctx.fillStyle = "#3d2260";
-    ctx.shadowColor = "rgba(255,255,255,0.9)";
-    ctx.shadowBlur = 10;
-    ctx.fillText(name, textX, bY + 56);
-    ctx.shadowBlur = 0;
+    ctx.font = "bold 38px 'Segoe UI', 'Poppins', sans-serif";
+    ctx.fillStyle = "#2c1a4a"; // warna lebih gelap agar kontras
+    ctx.fillText(name, textX, bY + 42);
 
     // Dot dekorasi di bawah nama
     const dotCols = ["#FF8FAB", "#A78BFA", "#60CDFF", "#FFD580"];
+    const dotY = bY + 85;
     for (let i = 0; i < 4; i++) {
       ctx.beginPath();
-      ctx.arc(textX + i * 13, bY + 70, 3.5, 0, Math.PI * 2);
+      ctx.arc(textX + i * 13, dotY, 3.5, 0, Math.PI * 2);
       ctx.fillStyle = dotCols[i];
       ctx.fill();
     }
@@ -175,24 +179,24 @@ module.exports = async (req, res) => {
       { label: "🏆  Rank",  value: rank,  c1: "#93E0FF", c2: "#60CDFF" }
     ];
 
-    const cardY = bY + 84;
+    const cardY = bY + 100;
     const totalW = width - textX - 50;
     const gap = 14;
     const cardW = (totalW - gap * (stats.length - 1)) / stats.length;
-    const cardH = 80;
+    const cardH = 75;
 
     for (let i = 0; i < stats.length; i++) {
       const cx2 = textX + i * (cardW + gap);
 
       // Shadow kartu
-      ctx.shadowColor = "rgba(180,160,220,0.28)";
       ctx.shadowBlur = 16;
+      ctx.shadowColor = "rgba(180,160,220,0.28)";
       ctx.shadowOffsetY = 5;
 
       // Background kartu
       const cGrad = ctx.createLinearGradient(cx2, cardY, cx2, cardY + cardH);
-      cGrad.addColorStop(0, "rgba(255,255,255,0.82)");
-      cGrad.addColorStop(1, "rgba(255,255,255,0.50)");
+      cGrad.addColorStop(0, "rgba(255,255,255,0.85)");
+      cGrad.addColorStop(1, "rgba(255,255,255,0.55)");
       ctx.fillStyle = cGrad;
       roundRect(ctx, cx2, cardY, cardW, cardH, 18);
       ctx.fill();
@@ -209,22 +213,22 @@ module.exports = async (req, res) => {
       roundRect(ctx, cx2, cardY, cardW, cardH, 18);
       ctx.stroke();
 
-      // Nilai
-      ctx.font = "bold 22px sans-serif";
-      ctx.fillStyle = "#3d2260";
+      // Nilai (gunakan baseline middle agar posisi lebih baik)
+      ctx.font = "bold 22px 'Segoe UI', sans-serif";
+      ctx.fillStyle = "#2c1a4a";
       ctx.textAlign = "center";
-      ctx.shadowColor = "rgba(255,255,255,0.95)";
-      ctx.shadowBlur = 6;
-      ctx.fillText(stats[i].value, cx2 + cardW / 2, cardY + 35);
-      ctx.shadowBlur = 0;
+      ctx.textBaseline = "middle";
+      ctx.fillText(stats[i].value, cx2 + cardW / 2, cardY + 32);
 
       // Label
-      ctx.font = "13px sans-serif";
-      ctx.fillStyle = "#8B6BAE";
-      ctx.fillText(stats[i].label, cx2 + cardW / 2, cardY + 60);
+      ctx.font = "13px 'Segoe UI', sans-serif";
+      ctx.fillStyle = "#6b4e8a";
+      ctx.fillText(stats[i].label, cx2 + cardW / 2, cardY + 58);
     }
 
+    // Reset alignment untuk teks lain (tidak ada lagi, tapi biar rapi)
     ctx.textAlign = "left";
+    ctx.textBaseline = "top";
 
     const buffer = canvas.toBuffer("image/png");
     res.setHeader("Content-Type", "image/png");
