@@ -1,8 +1,22 @@
-const { createCanvas, loadImage } = require("canvas");
+const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
+
+// =========================
+// LOAD FONT (FIX KOTAK)
+// =========================
+GlobalFonts.registerFromPath("./fonts/Inter-Regular.ttf", "Inter");
+GlobalFonts.registerFromPath("./fonts/Inter-Bold.ttf", "InterBold");
 
 module.exports = async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
+
+  if (req.query.type !== "profile") {
+    return res.status(400).json({ error: 'Gunakan type="profile"' });
+  }
+
   try {
-    const {
+    let {
       name = "User",
       uang = "0",
       limit = "0",
@@ -12,18 +26,17 @@ module.exports = async (req, res) => {
       accent = "#7c3aed"
     } = req.query;
 
-    const width = 800;
-    const height = 400;
-
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext("2d");
-
     // =========================
     // SAFE COLOR
     // =========================
-    const safeAccent = /^#([0-9A-F]{3}){1,2}$/i.test(accent)
-      ? accent
-      : "#7c3aed";
+    if (!accent || !/^#([0-9A-F]{3}){1,2}$/i.test(accent)) {
+      accent = "#7c3aed";
+    }
+
+    const width = 800;
+    const height = 400;
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext("2d");
 
     // =========================
     // BACKGROUND
@@ -38,11 +51,10 @@ module.exports = async (req, res) => {
       ctx.fillRect(0, 0, width, height);
     }
 
-    // overlay
-    const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, "rgba(0,0,0,0.4)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.7)");
-    ctx.fillStyle = gradient;
+    const overlay = ctx.createLinearGradient(0, 0, width, height);
+    overlay.addColorStop(0, "rgba(0,0,0,0.4)");
+    overlay.addColorStop(1, "rgba(0,0,0,0.7)");
+    ctx.fillStyle = overlay;
     ctx.fillRect(0, 0, width, height);
 
     // =========================
@@ -53,13 +65,11 @@ module.exports = async (req, res) => {
     const cardW = width - 80;
     const cardH = height - 80;
 
-    roundRect(ctx, cardX, cardY, cardW, cardH, 20);
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    ctx.fill();
-
-    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
     ctx.lineWidth = 1.2;
-    ctx.stroke();
+
+    roundRect(ctx, cardX, cardY, cardW, cardH, 18, true, true);
 
     // =========================
     // AVATAR
@@ -75,24 +85,39 @@ module.exports = async (req, res) => {
     const ax = cardX + 30;
     const ay = cardY + 30;
 
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 12;
+
     ctx.save();
     ctx.beginPath();
     ctx.arc(ax + size / 2, ay + size / 2, size / 2, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
-
     ctx.drawImage(avatarImg, ax, ay, size, size);
     ctx.restore();
 
+    ctx.shadowBlur = 0;
+
     // =========================
-    // TEXT
+    // TEXT UTILS
     // =========================
+    function limitText(text, maxWidth) {
+      ctx.font = "bold 26px InterBold";
+      while (ctx.measureText(text).width > maxWidth) {
+        text = text.slice(0, -1);
+      }
+      return text;
+    }
+
     const textX = ax + size + 30;
 
+    // =========================
+    // NAMA
+    // =========================
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 26px Arial";
+    ctx.font = "bold 26px InterBold";
 
-    const safeName = limitText(ctx, name, 400);
+    const safeName = limitText(name, 400);
     ctx.fillText(safeName, textX, ay + 40);
 
     // =========================
@@ -107,11 +132,11 @@ module.exports = async (req, res) => {
     let y = ay + 85;
 
     info.forEach(([label, value]) => {
-      ctx.font = "14px Arial";
+      ctx.font = "14px Inter";
       ctx.fillStyle = "#9ca3af";
       ctx.fillText(label, textX, y);
 
-      ctx.font = "bold 20px Arial";
+      ctx.font = "bold 20px InterBold";
       ctx.fillStyle = "#ffffff";
       ctx.fillText(value, textX, y + 22);
 
@@ -119,21 +144,21 @@ module.exports = async (req, res) => {
     });
 
     // =========================
-    // ACCENT LINE
+    // ACCENT
     // =========================
     const acc = ctx.createLinearGradient(cardX, 0, cardX + cardW, 0);
-    acc.addColorStop(0, safeAccent);
+    acc.addColorStop(0, accent);
     acc.addColorStop(1, "#ffffff");
 
     ctx.fillStyle = acc;
-    roundRect(ctx, cardX, cardY + cardH - 8, cardW, 8, 8);
-    ctx.fill();
+    roundRect(ctx, cardX, cardY + cardH - 8, cardW, 8, 8, true, false);
 
     // =========================
     // OUTPUT
     // =========================
+    const buffer = canvas.toBuffer("image/png");
     res.setHeader("Content-Type", "image/png");
-    canvas.createPNGStream().pipe(res);
+    res.send(buffer);
 
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -141,9 +166,9 @@ module.exports = async (req, res) => {
 };
 
 // =========================
-// HELPERS
+// HELPER
 // =========================
-function roundRect(ctx, x, y, w, h, r = 10) {
+function roundRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.lineTo(x + w - r, y);
@@ -155,11 +180,6 @@ function roundRect(ctx, x, y, w, h, r = 10) {
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
-}
-
-function limitText(ctx, text, maxWidth) {
-  while (ctx.measureText(text).width > maxWidth) {
-    text = text.slice(0, -1);
-  }
-  return text;
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
 }
