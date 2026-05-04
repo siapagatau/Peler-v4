@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const {
+    let {
       name = "User",
       uang = "0",
       limit = "0",
@@ -20,6 +20,13 @@ module.exports = async (req, res) => {
       background = "",
       accent = "#7c3aed"
     } = req.query;
+
+    // =========================
+    // SAFE COLOR
+    // =========================
+    if (!accent || !/^#([0-9A-F]{3}){1,2}$/i.test(accent)) {
+      accent = "#7c3aed";
+    }
 
     const width = 800;
     const height = 400;
@@ -30,20 +37,17 @@ module.exports = async (req, res) => {
     // =========================
     // BACKGROUND
     // =========================
-    if (background) {
-      try {
+    try {
+      if (background) {
         const bg = await loadImage(background);
         ctx.drawImage(bg, 0, 0, width, height);
-      } catch {
-        ctx.fillStyle = "#1e1e2e";
-        ctx.fillRect(0, 0, width, height);
-      }
-    } else {
+      } else throw "no-bg";
+    } catch {
       ctx.fillStyle = "#1e1e2e";
       ctx.fillRect(0, 0, width, height);
     }
 
-    // Overlay gradient soft
+    // overlay
     const gradient = ctx.createLinearGradient(0, 0, width, height);
     gradient.addColorStop(0, "rgba(0,0,0,0.4)");
     gradient.addColorStop(1, "rgba(0,0,0,0.7)");
@@ -51,18 +55,18 @@ module.exports = async (req, res) => {
     ctx.fillRect(0, 0, width, height);
 
     // =========================
-    // CARD (glass)
+    // CARD
     // =========================
     const cardX = 40;
     const cardY = 40;
     const cardW = width - 80;
     const cardH = height - 80;
 
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    ctx.strokeStyle = "rgba(255,255,255,0.15)";
-    ctx.lineWidth = 1.5;
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1.2;
 
-    roundRect(ctx, cardX, cardY, cardW, cardH, 20, true, true);
+    roundRect(ctx, cardX, cardY, cardW, cardH, 18, true, true);
 
     // =========================
     // AVATAR
@@ -78,9 +82,8 @@ module.exports = async (req, res) => {
     const ax = cardX + 30;
     const ay = cardY + 30;
 
-    // glow
     ctx.shadowColor = accent;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 12; // lebih soft
 
     ctx.save();
     ctx.beginPath();
@@ -93,47 +96,58 @@ module.exports = async (req, res) => {
     ctx.shadowBlur = 0;
 
     // =========================
-    // TEXT
+    // TEXT UTILS
     // =========================
+    function limitText(text, maxWidth) {
+      while (ctx.measureText(text).width > maxWidth) {
+        text = text.slice(0, -1);
+      }
+      return text;
+    }
+
+    // =========================
+    // NAMA
+    // =========================
+    const textX = ax + size + 30;
+
     ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 26px sans-serif";
 
-    // Nama
-    ctx.font = "bold 28px sans-serif";
-    ctx.fillText(name, ax + size + 30, ay + 40);
+    const safeName = limitText(name, 400);
+    ctx.fillText(safeName, textX, ay + 40);
 
     // =========================
-    // INFO BOX
+    // INFO
     // =========================
-    const infoX = ax + size + 30;
-    let infoY = ay + 80;
-
     const info = [
       ["Uang", uang],
       ["Limit", limit],
       ["Rank", rank],
     ];
 
+    let y = ay + 85;
+
     info.forEach(([label, value]) => {
-      ctx.font = "16px sans-serif";
-      ctx.fillStyle = "#cbd5e1";
-      ctx.fillText(label, infoX, infoY);
+      ctx.font = "14px sans-serif";
+      ctx.fillStyle = "#9ca3af";
+      ctx.fillText(label, textX, y);
 
       ctx.font = "bold 20px sans-serif";
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(value, infoX, infoY + 25);
+      ctx.fillText(value, textX, y + 22);
 
-      infoY += 60;
+      y += 55;
     });
 
     // =========================
-    // ACCENT BAR (gradient)
+    // ACCENT LINE
     // =========================
-    const acc = ctx.createLinearGradient(0, 0, 200, 0);
+    const acc = ctx.createLinearGradient(cardX, 0, cardX + cardW, 0);
     acc.addColorStop(0, accent);
     acc.addColorStop(1, "#ffffff");
 
     ctx.fillStyle = acc;
-    roundRect(ctx, cardX, cardY + cardH - 10, cardW, 10, 10, true, false);
+    roundRect(ctx, cardX, cardY + cardH - 8, cardW, 8, 8, true, false);
 
     // =========================
     // OUTPUT
@@ -147,7 +161,7 @@ module.exports = async (req, res) => {
   }
 };
 
-// helper rounded rectangle
+// rounded rect
 function roundRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
