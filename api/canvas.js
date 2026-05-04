@@ -3,8 +3,8 @@ const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 // =========================
 // LOAD FONT (FIX KOTAK)
 // =========================
-GlobalFonts.registerFromPath("./fonts/Inter-Regular.ttf", "Inter");
-GlobalFonts.registerFromPath("./fonts/Inter-Bold.ttf", "InterBold");
+GlobalFonts.registerFromPath("../fonts/Inter-Regular.ttf", "Inter");
+GlobalFonts.registerFromPath("../fonts/Inter-Bold.ttf", "InterBold");
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
