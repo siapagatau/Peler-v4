@@ -1,10 +1,21 @@
 const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
+const fs = require("fs");
+const path = require("path");
 
 // =========================
-// LOAD FONT (FIX KOTAK)
+// LOAD FONT (BUFFER MODE - PALING AMAN)
 // =========================
-GlobalFonts.registerFromPath("./fonts/Inter-Regular.ttf", "Inter");
-GlobalFonts.registerFromPath("./fonts/Inter-Bold.ttf", "InterBold");
+try {
+  const regular = fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf"));
+  const bold = fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf"));
+
+  GlobalFonts.register(regular, "Inter");
+  GlobalFonts.register(bold, "InterBold");
+
+  console.log("FONT LOADED:", GlobalFonts.families);
+} catch (e) {
+  console.log("FONT ERROR:", e.message);
+}
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
