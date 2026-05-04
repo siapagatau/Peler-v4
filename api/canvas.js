@@ -3,25 +3,22 @@ const fs = require("fs");
 const path = require("path");
 
 // =========================
-// LOAD FONT (BUFFER MODE - PALING AMAN)
+// LOAD FONT
 // =========================
 try {
   const regular = fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf"));
   const bold = fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf"));
-
   GlobalFonts.register(regular, "Inter");
   GlobalFonts.register(bold, "InterBold");
-
-  console.log("FONT LOADED:", GlobalFonts.families);
+  console.log("✅ Font loaded:", GlobalFonts.families);
 } catch (e) {
-  console.log("FONT ERROR:", e.message);
+  console.log("⚠️ Font error, using fallback:", e.message);
 }
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
-
   if (req.query.type !== "profile") {
     return res.status(400).json({ error: 'Gunakan type="profile"' });
   }
@@ -34,23 +31,30 @@ module.exports = async (req, res) => {
       rank = "Member",
       avatar = "https://cdn.discordapp.com/embed/avatars/0.png",
       background = "",
-      accent = "#7c3aed"
+      accent = "#7c3aed",
+      level = "1",
+      xp = "0",
+      maxXp = "100"
     } = req.query;
 
-    // =========================
-    // SAFE COLOR
-    // =========================
+    // Validasi & parsing
+    const money = parseInt(uang) || 0;
+    const lim = parseInt(limit) || 0;
+    const currentXp = Math.min(parseInt(xp) || 0, parseInt(maxXp) || 100);
+    const maxXpVal = parseInt(maxXp) || 100;
+    const xpPercent = (currentXp / maxXpVal) * 100;
+
     if (!accent || !/^#([0-9A-F]{3}){1,2}$/i.test(accent)) {
       accent = "#7c3aed";
     }
 
     const width = 800;
-    const height = 400;
+    const height = 450; // Sedikit lebih tinggi untuk progress bar
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
     // =========================
-    // BACKGROUND
+    // BACKGROUND (Gambar atau gradien)
     // =========================
     try {
       if (background) {
@@ -58,32 +62,38 @@ module.exports = async (req, res) => {
         ctx.drawImage(bg, 0, 0, width, height);
       } else throw "no-bg";
     } catch {
-      ctx.fillStyle = "#1e1e2e";
+      const grad = ctx.createLinearGradient(0, 0, width, height);
+      grad.addColorStop(0, "#1a1a2e");
+      grad.addColorStop(1, "#16213e");
+      ctx.fillStyle = grad;
       ctx.fillRect(0, 0, width, height);
     }
 
-    const overlay = ctx.createLinearGradient(0, 0, width, height);
-    overlay.addColorStop(0, "rgba(0,0,0,0.4)");
-    overlay.addColorStop(1, "rgba(0,0,0,0.7)");
-    ctx.fillStyle = overlay;
+    // Overlay gelap + blur effect (simulasi glass)
+    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
     ctx.fillRect(0, 0, width, height);
 
     // =========================
-    // CARD
+    // CARD UTAMA (Glassmorphism)
     // =========================
     const cardX = 40;
     const cardY = 40;
     const cardW = width - 80;
     const cardH = height - 80;
 
-    ctx.fillStyle = "rgba(255,255,255,0.06)";
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
-    ctx.lineWidth = 1.2;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = "rgba(30, 30, 46, 0.75)";
+    roundRect(ctx, cardX, cardY, cardW, cardH, 24, true, false);
+    ctx.shadowBlur = 0;
 
-    roundRect(ctx, cardX, cardY, cardW, cardH, 18, true, true);
+    // Border tipis
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, cardX, cardY, cardW, cardH, 24, false, true);
 
     // =========================
-    // AVATAR
+    // AVATAR (dengan border gradien)
     // =========================
     let avatarImg;
     try {
@@ -92,77 +102,101 @@ module.exports = async (req, res) => {
       avatarImg = await loadImage("https://cdn.discordapp.com/embed/avatars/0.png");
     }
 
-    const size = 100;
-    const ax = cardX + 30;
-    const ay = cardY + 30;
+    const avatarSize = 110;
+    const avatarX = cardX + 35;
+    const avatarY = cardY + 35;
 
-    ctx.shadowColor = accent;
-    ctx.shadowBlur = 12;
-
+    // Lingkaran luar gradien
     ctx.save();
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = accent;
     ctx.beginPath();
-    ctx.arc(ax + size / 2, ay + size / 2, size / 2, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(avatarImg, ax, ay, size, size);
+    ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2 + 4, 0, Math.PI*2);
+    ctx.fillStyle = accent;
+    ctx.fill();
     ctx.restore();
 
-    ctx.shadowBlur = 0;
+    // Clip avatar
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, Math.PI*2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
+    ctx.restore();
 
     // =========================
-    // TEXT UTILS
+    // NAMA & RANK BADGE
     // =========================
-    function limitText(text, maxWidth) {
-      ctx.font = "bold 26px InterBold";
-      while (ctx.measureText(text).width > maxWidth) {
-        text = text.slice(0, -1);
-      }
-      return text;
-    }
+    const textX = avatarX + avatarSize + 35;
+    let currentY = avatarY + 35;
 
-    const textX = ax + size + 30;
-
-    // =========================
-    // NAMA
-    // =========================
+    ctx.font = "bold 28px InterBold";
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 26px InterBold";
+    let displayName = name.length > 18 ? name.slice(0, 16) + "..." : name;
+    ctx.fillText(displayName, textX, currentY);
 
-    const safeName = limitText(name, 400);
-    ctx.fillText(safeName, textX, ay + 40);
+    // Badge rank
+    ctx.font = "bold 14px InterBold";
+    ctx.fillStyle = accent;
+    const rankText = rank.toUpperCase();
+    const rankWidth = ctx.measureText(rankText).width + 20;
+    ctx.fillStyle = "rgba(124, 58, 237, 0.2)";
+    roundRect(ctx, textX, currentY + 8, rankWidth, 24, 12, true, false);
+    ctx.fillStyle = accent;
+    ctx.fillText(rankText, textX + 10, currentY + 25);
+    currentY += 45;
 
     // =========================
-    // INFO
+    // INFO CARDS (Uang, Limit, Level)
     // =========================
-    const info = [
-      ["Uang", uang],
-      ["Limit", limit],
-      ["Rank", rank],
+    const infoCards = [
+      { label: "💰 UANG", value: formatNumber(money), color: "#10b981" },
+      { label: "🎫 LIMIT", value: formatNumber(lim), color: "#f59e0b" },
+      { label: "⭐ LEVEL", value: level, color: "#ef4444" }
     ];
 
-    let y = ay + 85;
-
-    info.forEach(([label, value]) => {
-      ctx.font = "14px Inter";
-      ctx.fillStyle = "#9ca3af";
-      ctx.fillText(label, textX, y);
-
-      ctx.font = "bold 20px InterBold";
+    const cardStartY = currentY;
+    const cardWidth = 150;
+    const cardHeight = 70;
+    let cardXPos = textX;
+    for (let i = 0; i < infoCards.length; i++) {
+      const card = infoCards[i];
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      roundRect(ctx, cardXPos, cardStartY, cardWidth, cardHeight, 12, true, false);
+      ctx.fillStyle = card.color;
+      ctx.font = "bold 14px Inter";
+      ctx.fillText(card.label, cardXPos + 12, cardStartY + 25);
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(value, textX, y + 22);
+      ctx.font = "bold 22px InterBold";
+      ctx.fillText(card.value, cardXPos + 12, cardStartY + 55);
+      cardXPos += cardWidth + 15;
+    }
 
-      y += 55;
-    });
+    currentY = cardStartY + cardHeight + 25;
 
     // =========================
-    // ACCENT
+    // PROGRESS BAR XP
     // =========================
-    const acc = ctx.createLinearGradient(cardX, 0, cardX + cardW, 0);
-    acc.addColorStop(0, accent);
-    acc.addColorStop(1, "#ffffff");
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "12px Inter";
+    ctx.fillText("⚡ PROGRESS XP", textX, currentY - 5);
+    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    roundRect(ctx, textX, currentY, 420, 10, 10, true, false);
+    ctx.fillStyle = accent;
+    roundRect(ctx, textX, currentY, (xpPercent / 100) * 420, 10, 10, true, false);
+    ctx.fillStyle = "#d1d5db";
+    ctx.font = "bold 10px Inter";
+    ctx.fillText(`${currentXp}/${maxXpVal} XP`, textX + 430, currentY + 8);
 
-    ctx.fillStyle = acc;
-    roundRect(ctx, cardX, cardY + cardH - 8, cardW, 8, 8, true, false);
+    // =========================
+    // ACCENT LINE BAWAH (gradien)
+    // =========================
+    const gradAccent = ctx.createLinearGradient(cardX, cardY+cardH-8, cardX+cardW, cardY+cardH-8);
+    gradAccent.addColorStop(0, accent);
+    gradAccent.addColorStop(1, "#ffffff");
+    ctx.fillStyle = gradAccent;
+    roundRect(ctx, cardX, cardY + cardH - 8, cardW, 6, 6, true, false);
 
     // =========================
     // OUTPUT
@@ -172,12 +206,13 @@ module.exports = async (req, res) => {
     res.send(buffer);
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 };
 
 // =========================
-// HELPER
+// HELPER FUNCTIONS
 // =========================
 function roundRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
@@ -193,4 +228,10 @@ function roundRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.closePath();
   if (fill) ctx.fill();
   if (stroke) ctx.stroke();
+}
+
+function formatNumber(num) {
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + "M";
+  if (num >= 1_000) return (num / 1_000).toFixed(1) + "K";
+  return num.toString();
 }
