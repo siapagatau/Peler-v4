@@ -1,64 +1,72 @@
 const { createCanvas, loadImage } = require("@napi-rs/canvas");
-const { Font } = require("canvacord");
-
-Font.loadDefault();
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Content-Type", "image/png");
-  
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   const { type } = req.query;
   if (type !== "profile") {
-    return res.status(400).json({ error: 'Hanya mendukung type="profile"' });
+    return res.status(400).json({ error: 'Gunakan type="profile"' });
   }
 
   try {
-    // Ambil data dari query
     const {
-      name = "Nama Pengguna",
-      avatar = "https://cdn.discordapp.com/embed/avatars/0.png",
-      background = "",
+      name = "User",
       uang = "0",
       limit = "0",
-      rank = "Bronze",
-      accent = "#7289DA" // Warna default soft blue
+      rank = "Member",
+      avatar = "https://cdn.discordapp.com/embed/avatars/0.png",
+      background = "",
+      accent = "#7c3aed"
     } = req.query;
 
     const width = 800;
     const height = 400;
+
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
-    // --- BACKGROUND DAN OVERLAY ---
-    // Gambar background atau warna solid
+    // =========================
+    // BACKGROUND
+    // =========================
     if (background) {
       try {
         const bg = await loadImage(background);
         ctx.drawImage(bg, 0, 0, width, height);
       } catch {
-        // Gradien background default yang soft
-        const bgGradient = ctx.createLinearGradient(0, 0, width, height);
-        bgGradient.addColorStop(0, '#1a1a2e');
-        bgGradient.addColorStop(1, '#16213e');
-        ctx.fillStyle = bgGradient;
+        ctx.fillStyle = "#1e1e2e";
         ctx.fillRect(0, 0, width, height);
       }
     } else {
-      const bgGradient = ctx.createLinearGradient(0, 0, width, height);
-      bgGradient.addColorStop(0, '#1a1a2e');
-      bgGradient.addColorStop(1, '#16213e');
-      ctx.fillStyle = bgGradient;
+      ctx.fillStyle = "#1e1e2e";
       ctx.fillRect(0, 0, width, height);
     }
 
-    // Overlay semi-transparan biar teks jelas
-    ctx.fillStyle = "rgba(20, 20, 40, 0.65)";
+    // Overlay gradient soft
+    const gradient = ctx.createLinearGradient(0, 0, width, height);
+    gradient.addColorStop(0, "rgba(0,0,0,0.4)");
+    gradient.addColorStop(1, "rgba(0,0,0,0.7)");
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
-    // --- AVATAR ---
+    // =========================
+    // CARD (glass)
+    // =========================
+    const cardX = 40;
+    const cardY = 40;
+    const cardW = width - 80;
+    const cardH = height - 80;
+
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 1.5;
+
+    roundRect(ctx, cardX, cardY, cardW, cardH, 20, true, true);
+
+    // =========================
+    // AVATAR
+    // =========================
     let avatarImg;
     try {
       avatarImg = await loadImage(avatar);
@@ -66,97 +74,92 @@ module.exports = async (req, res) => {
       avatarImg = await loadImage("https://cdn.discordapp.com/embed/avatars/0.png");
     }
 
-    // Efek lingkaran luar avatar
-    const avatarSize = 130;
-    const avatarX = 50;
-    const avatarY = (height - avatarSize) / 2;
-    
-    // Lingkaran glow
-    ctx.beginPath();
-    ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2 + 10, 0, Math.PI*2);
-    const gradient = ctx.createRadialGradient(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2 + 10);
-    gradient.addColorStop(0, accent);
-    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = gradient;
-    ctx.fill();
+    const size = 100;
+    const ax = cardX + 30;
+    const ay = cardY + 30;
 
-    // Avatar bulat
+    // glow
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 20;
+
     ctx.save();
     ctx.beginPath();
-    ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, Math.PI*2);
+    ctx.arc(ax + size / 2, ay + size / 2, size / 2, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
-    ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
+    ctx.drawImage(avatarImg, ax, ay, size, size);
     ctx.restore();
 
-    // --- TEKS DAN INFORMASI ---
-    const textStartX = avatarX + avatarSize + 40;
-
-    // Nama
-    ctx.font = "bold 36px 'Whitney'";
-    ctx.fillStyle = "#FFFFFF";
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = 10;
-    ctx.fillText(name, textStartX, height / 2 - 60);
     ctx.shadowBlur = 0;
 
-    // Garis dekoratif bawah nama
-    ctx.beginPath();
-    ctx.moveTo(textStartX, height / 2 - 40);
-    ctx.lineTo(textStartX + 250, height / 2 - 40);
-    ctx.strokeStyle = accent;
-    ctx.lineWidth = 4;
-    ctx.stroke();
+    // =========================
+    // TEXT
+    // =========================
+    ctx.fillStyle = "#ffffff";
 
-    // --- STATISTIK (Uang, Limit, Rank) ---
-    const statsY = height / 2 + 20;
-    const lineHeight = 45;
+    // Nama
+    ctx.font = "bold 28px sans-serif";
+    ctx.fillText(name, ax + size + 30, ay + 40);
 
-    const stats = [
-      { label: "💰 Uang", value: formatNumber(uang) },
-      { label: "🔒 Limit", value: limit },
-      { label: "🏆 Rank", value: rank }
+    // =========================
+    // INFO BOX
+    // =========================
+    const infoX = ax + size + 30;
+    let infoY = ay + 80;
+
+    const info = [
+      ["Uang", uang],
+      ["Limit", limit],
+      ["Rank", rank],
     ];
 
-    ctx.font = "24px 'Whitney'";
-    
-    stats.forEach((stat, index) => {
-      const yPos = statsY + (index * lineHeight);
-      
-      // Label
-      ctx.fillStyle = "#B9BBBE";
-      ctx.fillText(`${stat.label}:`, textStartX, yPos);
-      
-      // Value
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillText(stat.value, textStartX + 140, yPos);
+    info.forEach(([label, value]) => {
+      ctx.font = "16px sans-serif";
+      ctx.fillStyle = "#cbd5e1";
+      ctx.fillText(label, infoX, infoY);
+
+      ctx.font = "bold 20px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(value, infoX, infoY + 25);
+
+      infoY += 60;
     });
 
-    // --- STRIP WARNA DI KIRI ---
-    const sideGradient = ctx.createLinearGradient(0, 0, 15, height);
-    sideGradient.addColorStop(0, accent);
-    sideGradient.addColorStop(1, adjustBrightness(accent, -20));
-    ctx.fillStyle = sideGradient;
-    ctx.fillRect(0, 0, 15, height);
+    // =========================
+    // ACCENT BAR (gradient)
+    // =========================
+    const acc = ctx.createLinearGradient(0, 0, 200, 0);
+    acc.addColorStop(0, accent);
+    acc.addColorStop(1, "#ffffff");
 
-    // Kirim gambar
+    ctx.fillStyle = acc;
+    roundRect(ctx, cardX, cardY + cardH - 10, cardW, 10, 10, true, false);
+
+    // =========================
+    // OUTPUT
+    // =========================
     const buffer = canvas.toBuffer("image/png");
+    res.setHeader("Content-Type", "image/png");
     res.send(buffer);
 
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: err.message });
   }
 };
 
-// Helper function untuk format angka jadi ribuan
-function formatNumber(num) {
-  return new Intl.NumberFormat('id-ID').format(num);
-}
-
-// Helper function untuk gelapkan warna
-function adjustBrightness(color, amount) {
-  return '#' + color.replace(/^#/, '').replace(/../g, color => 
-    ('0'+Math.max(0, Math.min(255, parseInt(color, 16) + amount)).toString(16)).slice(-2)
-  );
+// helper rounded rectangle
+function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
 }
