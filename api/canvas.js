@@ -15,205 +15,217 @@ module.exports = async (req, res) => {
       name = "Pengguna",
       avatar = "https://cdn.discordapp.com/embed/avatars/0.png",
       background = "",
-      accent = "#f97316",
       uang = "Rp 0",
       limit = "100",
       rank = "#1",
       badge = "Member"
     } = req.query;
 
-    const accentColor = accent.startsWith("#") ? accent : `#${accent}`;
-
-    // Helper: hex to rgb
-    const hexToRgb = (hex) => {
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return { r, g, b };
-    };
-
-    const rgb = hexToRgb(accentColor);
-
     const width = 900;
-    const height = 320;
+    const height = 340;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
-    // ─── BACKGROUND ───────────────────────────────────────────────
+    // ─── BACKGROUND GRADIENT PASTEL ───────────────────────────────
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    bgGrad.addColorStop(0,   "#fce4f3");
+    bgGrad.addColorStop(0.4, "#e8d5f5");
+    bgGrad.addColorStop(0.7, "#d0e8ff");
+    bgGrad.addColorStop(1,   "#c8f0e8");
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    // Background image overlay (sangat transparan)
     if (background) {
       try {
         const bg = await loadImage(background);
-        // Cover fit
         const scale = Math.max(width / bg.width, height / bg.height);
         const bw = bg.width * scale;
         const bh = bg.height * scale;
+        ctx.globalAlpha = 0.15;
         ctx.drawImage(bg, (width - bw) / 2, (height - bh) / 2, bw, bh);
-      } catch {
-        drawFallbackBg(ctx, width, height, rgb);
-      }
-    } else {
-      drawFallbackBg(ctx, width, height, rgb);
+        ctx.globalAlpha = 1;
+      } catch {}
     }
 
-    // Dark overlay gradient (kiri lebih gelap, kanan sedikit transparan)
-    const overlayGrad = ctx.createLinearGradient(0, 0, width, 0);
-    overlayGrad.addColorStop(0, "rgba(5,5,15,0.92)");
-    overlayGrad.addColorStop(0.55, "rgba(5,5,15,0.80)");
-    overlayGrad.addColorStop(1, "rgba(5,5,15,0.55)");
-    ctx.fillStyle = overlayGrad;
-    ctx.fillRect(0, 0, width, height);
+    // ─── BUBBLE DEKORASI ──────────────────────────────────────────
+    const bubbles = [
+      { x: 820, y: 40,  r: 65, color: "rgba(255,182,193,0.38)" },
+      { x: 760, y: 290, r: 50, color: "rgba(180,210,255,0.38)" },
+      { x: 55,  y: 295, r: 38, color: "rgba(200,240,220,0.42)" },
+      { x: 875, y: 185, r: 32, color: "rgba(220,200,255,0.38)" },
+      { x: 410, y: 8,   r: 28, color: "rgba(255,220,180,0.32)" },
+      { x: 160, y: 18,  r: 20, color: "rgba(255,182,230,0.32)" },
+    ];
+    for (const b of bubbles) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fillStyle = b.color;
+      ctx.fill();
+    }
 
-    // ─── ACCENT LEFT BAR ──────────────────────────────────────────
-    const barGrad = ctx.createLinearGradient(0, 0, 0, height);
-    barGrad.addColorStop(0, accentColor);
-    barGrad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},0.2)`);
-    ctx.fillStyle = barGrad;
-    ctx.fillRect(0, 0, 5, height);
+    // ─── SPARKLE / BINTANG ────────────────────────────────────────
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    const sparkles = [
+      { x: 700, y: 55,  s: 6 },
+      { x: 840, y: 130, s: 4 },
+      { x: 520, y: 22,  s: 5 },
+      { x: 295, y: 315, s: 4 },
+      { x: 660, y: 305, s: 5 },
+      { x: 78,  y: 78,  s: 3 },
+    ];
+    for (const sp of sparkles) drawStar(ctx, sp.x, sp.y, sp.s);
+
+    // ─── PANEL FROSTED GLASS ──────────────────────────────────────
+    ctx.fillStyle = "rgba(255,255,255,0.52)";
+    roundRect(ctx, 24, 24, width - 48, height - 48, 28);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.88)";
+    ctx.lineWidth = 2;
+    roundRect(ctx, 24, 24, width - 48, height - 48, 28);
+    ctx.stroke();
 
     // ─── AVATAR ───────────────────────────────────────────────────
     const avatarSize = 110;
-    const avatarX = 48;
+    const avatarX = 58;
     const avatarY = height / 2 - avatarSize / 2;
-    const cx = avatarX + avatarSize / 2;
-    const cy = avatarY + avatarSize / 2;
-    const radius = avatarSize / 2;
+    const acx = avatarX + avatarSize / 2;
+    const acy = avatarY + avatarSize / 2;
+    const rad = avatarSize / 2;
 
-    // Glow lingkaran avatar
-    const glowGrad = ctx.createRadialGradient(cx, cy, radius - 5, cx, cy, radius + 18);
-    glowGrad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0.6)`);
-    glowGrad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = glowGrad;
+    // Shadow lembut
+    ctx.shadowColor = "rgba(167,139,250,0.45)";
+    ctx.shadowBlur = 24;
     ctx.beginPath();
-    ctx.arc(cx, cy, radius + 18, 0, Math.PI * 2);
+    ctx.arc(acx, acy, rad + 6, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
     ctx.fill();
+    ctx.shadowBlur = 0;
 
-    // Ring aksen
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
-    ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // Clip & draw avatar
-    let avatarImg;
-    try {
-      avatarImg = await loadImage(avatar);
-    } catch {
-      avatarImg = await loadImage("https://cdn.discordapp.com/embed/avatars/0.png");
+    // Ring warna-warni (3 segmen)
+    const ringColors = ["#FF8FAB", "#A78BFA", "#60CDFF"];
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(acx, acy, rad + 8,
+        (i * 2 * Math.PI) / 3 - Math.PI / 2,
+        ((i + 1) * 2 * Math.PI) / 3 - Math.PI / 2
+      );
+      ctx.strokeStyle = ringColors[i];
+      ctx.lineWidth = 4.5;
+      ctx.stroke();
     }
+
+    // Avatar gambar
+    let avatarImg;
+    try { avatarImg = await loadImage(avatar); }
+    catch { avatarImg = await loadImage("https://cdn.discordapp.com/embed/avatars/0.png"); }
     ctx.save();
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.arc(acx, acy, rad, 0, Math.PI * 2);
     ctx.clip();
     ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
     ctx.restore();
 
-    // ─── TEKS KANAN AVATAR ────────────────────────────────────────
-    const textX = avatarX + avatarSize + 32;
-    const nameY = 80;
+    // ─── KONTEN TEKS ──────────────────────────────────────────────
+    const textX = avatarX + avatarSize + 38;
+    const badgeText = (badge || "Member").toUpperCase();
 
-    // Badge (Member, VIP, dll)
-    const badgeText = badge || "Member";
-    const badgePad = { x: 10, y: 4 };
+    // Badge pill
     ctx.font = "bold 11px sans-serif";
-    const badgeW = ctx.measureText(badgeText).width + badgePad.x * 2;
-    const badgeH = 22;
-    const badgeY = nameY - 46;
+    const bPad = 11;
+    const bW = ctx.measureText(badgeText).width + bPad * 2;
+    const bH = 23;
+    const bY = 50;
 
-    // Badge background
-    ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.2)`;
-    roundRect(ctx, textX, badgeY, badgeW, badgeH, 6);
+    const badgeGrad = ctx.createLinearGradient(textX, bY, textX + bW, bY + bH);
+    badgeGrad.addColorStop(0, "#FFB3C8");
+    badgeGrad.addColorStop(1, "#C4B5FD");
+    ctx.fillStyle = badgeGrad;
+    roundRect(ctx, textX, bY, bW, bH, 12);
     ctx.fill();
-    ctx.strokeStyle = accentColor;
-    ctx.lineWidth = 1;
-    roundRect(ctx, textX, badgeY, badgeW, badgeH, 6);
-    ctx.stroke();
 
-    ctx.fillStyle = accentColor;
+    ctx.fillStyle = "#fff";
     ctx.textAlign = "left";
-    ctx.fillText(badgeText.toUpperCase(), textX + badgePad.x, badgeY + 15);
-
-    // Nama
-    ctx.font = "bold 34px sans-serif";
-    ctx.fillStyle = "#FFFFFF";
-    ctx.shadowColor = `rgba(${rgb.r},${rgb.g},${rgb.b},0.8)`;
-    ctx.shadowBlur = 14;
-    ctx.fillText(name, textX, nameY);
+    ctx.shadowColor = "rgba(0,0,0,0.1)";
+    ctx.shadowBlur = 2;
+    ctx.fillText(badgeText, textX + bPad, bY + 16);
     ctx.shadowBlur = 0;
 
-    // Garis dekoratif tipis di bawah nama
-    const nameWidth = ctx.measureText(name).width;
-    const lineGrad = ctx.createLinearGradient(textX, 0, textX + nameWidth, 0);
-    lineGrad.addColorStop(0, accentColor);
-    lineGrad.addColorStop(1, "transparent");
-    ctx.strokeStyle = lineGrad;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(textX, nameY + 8);
-    ctx.lineTo(textX + nameWidth, nameY + 8);
-    ctx.stroke();
+    // Nama
+    ctx.font = "bold 38px sans-serif";
+    ctx.fillStyle = "#3d2260";
+    ctx.shadowColor = "rgba(255,255,255,0.9)";
+    ctx.shadowBlur = 10;
+    ctx.fillText(name, textX, bY + 56);
+    ctx.shadowBlur = 0;
+
+    // Dot dekorasi di bawah nama
+    const dotCols = ["#FF8FAB", "#A78BFA", "#60CDFF", "#FFD580"];
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.arc(textX + i * 13, bY + 70, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = dotCols[i];
+      ctx.fill();
+    }
 
     // ─── STAT CARDS ───────────────────────────────────────────────
     const stats = [
-      { label: "💰 Uang", value: uang },
-      { label: "⚡ Limit", value: limit },
-      { label: "🏆 Rank", value: rank }
+      { label: "💰  Uang",  value: uang,  c1: "#FFB3C8", c2: "#FF8FAB" },
+      { label: "⚡  Limit", value: limit, c1: "#C4B5FD", c2: "#A78BFA" },
+      { label: "🏆  Rank",  value: rank,  c1: "#93E0FF", c2: "#60CDFF" }
     ];
 
-    const cardStartX = textX;
-    const cardY = nameY + 32;
-    const cardGap = 16;
-    const cardH = 68;
-    const totalCardWidth = width - textX - 40;
-    const cardW = (totalCardWidth - cardGap * (stats.length - 1)) / stats.length;
+    const cardY = bY + 84;
+    const totalW = width - textX - 50;
+    const gap = 14;
+    const cardW = (totalW - gap * (stats.length - 1)) / stats.length;
+    const cardH = 80;
 
     for (let i = 0; i < stats.length; i++) {
-      const cx2 = cardStartX + i * (cardW + cardGap);
+      const cx2 = textX + i * (cardW + gap);
 
-      // Card background
-      ctx.fillStyle = "rgba(255,255,255,0.04)";
-      roundRect(ctx, cx2, cardY, cardW, cardH, 10);
+      // Shadow kartu
+      ctx.shadowColor = "rgba(180,160,220,0.28)";
+      ctx.shadowBlur = 16;
+      ctx.shadowOffsetY = 5;
+
+      // Background kartu
+      const cGrad = ctx.createLinearGradient(cx2, cardY, cx2, cardY + cardH);
+      cGrad.addColorStop(0, "rgba(255,255,255,0.82)");
+      cGrad.addColorStop(1, "rgba(255,255,255,0.50)");
+      ctx.fillStyle = cGrad;
+      roundRect(ctx, cx2, cardY, cardW, cardH, 18);
       ctx.fill();
 
-      // Border subtle
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
-      ctx.lineWidth = 1;
-      roundRect(ctx, cx2, cardY, cardW, cardH, 10);
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      // Border warna kartu
+      const bGrad = ctx.createLinearGradient(cx2, cardY, cx2 + cardW, cardY + cardH);
+      bGrad.addColorStop(0, stats[i].c1);
+      bGrad.addColorStop(1, stats[i].c2);
+      ctx.strokeStyle = bGrad;
+      ctx.lineWidth = 2.5;
+      roundRect(ctx, cx2, cardY, cardW, cardH, 18);
       ctx.stroke();
 
-      // Top accent line
-      const accentLine = ctx.createLinearGradient(cx2, cardY, cx2 + cardW, cardY);
-      accentLine.addColorStop(0, accentColor);
-      accentLine.addColorStop(1, "transparent");
-      ctx.strokeStyle = accentLine;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx2 + 10, cardY);
-      ctx.lineTo(cx2 + cardW - 10, cardY);
-      ctx.stroke();
-
-      // Value
+      // Nilai
       ctx.font = "bold 22px sans-serif";
-      ctx.fillStyle = "#FFFFFF";
+      ctx.fillStyle = "#3d2260";
       ctx.textAlign = "center";
-      ctx.fillText(stats[i].value, cx2 + cardW / 2, cardY + 32);
+      ctx.shadowColor = "rgba(255,255,255,0.95)";
+      ctx.shadowBlur = 6;
+      ctx.fillText(stats[i].value, cx2 + cardW / 2, cardY + 35);
+      ctx.shadowBlur = 0;
 
       // Label
-      ctx.font = "12px sans-serif";
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.fillText(stats[i].label, cx2 + cardW / 2, cardY + 52);
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#8B6BAE";
+      ctx.fillText(stats[i].label, cx2 + cardW / 2, cardY + 60);
     }
 
     ctx.textAlign = "left";
 
-    // ─── WATERMARK ────────────────────────────────────────────────
-    ctx.font = "11px sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
-    ctx.textAlign = "right";
-    ctx.fillText("WhatsApp Bot", width - 20, height - 14);
-    ctx.textAlign = "left";
-
-    // Output
     const buffer = canvas.toBuffer("image/png");
     res.setHeader("Content-Type", "image/png");
     res.send(buffer);
@@ -223,24 +235,6 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
-
-// ─── HELPERS ──────────────────────────────────────────────────────
-
-function drawFallbackBg(ctx, width, height, rgb) {
-  // Dark gradient + subtle noise feel
-  const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, `rgb(${Math.max(rgb.r - 100, 10)},${Math.max(rgb.g - 110, 8)},${Math.max(rgb.b - 80, 15)})`);
-  bg.addColorStop(1, "#0a0a12");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, width, height);
-
-  // Subtle radial glow di kiri atas
-  const glow = ctx.createRadialGradient(120, 120, 0, 120, 120, 300);
-  glow.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0.18)`);
-  glow.addColorStop(1, "transparent");
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, width, height);
-}
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -254,4 +248,21 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
+}
+
+function drawStar(ctx, x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const angle = (i * Math.PI) / 2;
+    ctx.lineTo(Math.cos(angle) * size, Math.sin(angle) * size);
+    ctx.lineTo(
+      Math.cos(angle + Math.PI / 4) * (size * 0.35),
+      Math.sin(angle + Math.PI / 4) * (size * 0.35)
+    );
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
