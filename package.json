@@ -5,7 +5,6 @@
     "node": "24.x"
   },
   "dependencies": {
-    "@napi-rs/canvas": "latest",
-    "canvacord": "latest"
+    "canvas": "latest"
   }
 }
