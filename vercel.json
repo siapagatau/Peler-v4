@@ -1,3 +1,10 @@
 {
-  "routes": [{ "src": "/api/canvas", "dest": "/api/canvas.js" }]
+  "routes": [
+    { "src": "/api/canvas", "dest": "/api/canvas.js" }
+  ],
+  "functions": {
+    "api/*.js": {
+      "includeFiles": "fonts/**"
+    }
+  }
 }
