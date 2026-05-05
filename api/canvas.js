@@ -3,17 +3,33 @@ const fs = require("fs");
 const path = require("path");
 
 // =========================
-// LOAD FONT
+// LOAD FONT (DENGAN EMOJI SUPPORT)
 // =========================
+let hasEmojiFont = false;
 try {
   const regular = fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf"));
   const bold = fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf"));
   GlobalFonts.register(regular, "Inter");
   GlobalFonts.register(bold, "InterBold");
-  console.log("✅ Font loaded:", GlobalFonts.families);
+
+  // Registrasi font emoji (jika ada)
+  try {
+    const emoji = fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf"));
+    GlobalFonts.register(emoji, "NotoColorEmoji");
+    hasEmojiFont = true;
+    console.log("✅ Emoji font loaded: NotoColorEmoji");
+  } catch (err) {
+    console.warn("⚠️ Emoji font not found, emoji will not render (place NotoColorEmoji.ttf in /fonts)");
+  }
 } catch (e) {
-  console.log("⚠️ Font error, using fallback:", e.message);
+  console.log("FONT ERROR:", e.message);
 }
+
+// Helper untuk membuat font family dengan fallback emoji
+const getFont = (weight, size, useEmoji = true) => {
+  const base = `${weight} ${size}px ${useEmoji && hasEmojiFont ? "'InterBold', 'NotoColorEmoji'" : "InterBold"}`;
+  return base;
+};
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -49,12 +65,12 @@ module.exports = async (req, res) => {
     }
 
     const width = 800;
-    const height = 450; // Sedikit lebih tinggi untuk progress bar
+    const height = 450;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
 
     // =========================
-    // BACKGROUND (Gambar atau gradien)
+    // BACKGROUND
     // =========================
     try {
       if (background) {
@@ -69,12 +85,11 @@ module.exports = async (req, res) => {
       ctx.fillRect(0, 0, width, height);
     }
 
-    // Overlay gelap + blur effect (simulasi glass)
     ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
     ctx.fillRect(0, 0, width, height);
 
     // =========================
-    // CARD UTAMA (Glassmorphism)
+    // CARD UTAMA
     // =========================
     const cardX = 40;
     const cardY = 40;
@@ -87,13 +102,12 @@ module.exports = async (req, res) => {
     roundRect(ctx, cardX, cardY, cardW, cardH, 24, true, false);
     ctx.shadowBlur = 0;
 
-    // Border tipis
     ctx.strokeStyle = "rgba(255,255,255,0.15)";
     ctx.lineWidth = 1.5;
     roundRect(ctx, cardX, cardY, cardW, cardH, 24, false, true);
 
     // =========================
-    // AVATAR (dengan border gradien)
+    // AVATAR
     // =========================
     let avatarImg;
     try {
@@ -106,7 +120,6 @@ module.exports = async (req, res) => {
     const avatarX = cardX + 35;
     const avatarY = cardY + 35;
 
-    // Lingkaran luar gradien
     ctx.save();
     ctx.shadowBlur = 8;
     ctx.shadowColor = accent;
@@ -116,7 +129,6 @@ module.exports = async (req, res) => {
     ctx.fill();
     ctx.restore();
 
-    // Clip avatar
     ctx.save();
     ctx.beginPath();
     ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, Math.PI*2);
@@ -126,19 +138,19 @@ module.exports = async (req, res) => {
     ctx.restore();
 
     // =========================
-    // NAMA & RANK BADGE
+    // NAMA & RANK BADGE (DENGAN FONT EMOJI)
     // =========================
     const textX = avatarX + avatarSize + 35;
     let currentY = avatarY + 35;
 
-    ctx.font = "bold 28px InterBold";
+    ctx.font = getFont("bold", 28, true);
     ctx.fillStyle = "#ffffff";
-    let displayName = name.length > 18 ? name.slice(0, 16) + "..." : name;
+    // Potong teks panjang (hindari overflow)
+    let displayName = name.length > 20 ? name.slice(0, 18) + "..." : name;
     ctx.fillText(displayName, textX, currentY);
 
     // Badge rank
-    ctx.font = "bold 14px InterBold";
-    ctx.fillStyle = accent;
+    ctx.font = getFont("bold", 14, true);
     const rankText = rank.toUpperCase();
     const rankWidth = ctx.measureText(rankText).width + 20;
     ctx.fillStyle = "rgba(124, 58, 237, 0.2)";
@@ -165,10 +177,10 @@ module.exports = async (req, res) => {
       ctx.fillStyle = "rgba(255,255,255,0.08)";
       roundRect(ctx, cardXPos, cardStartY, cardWidth, cardHeight, 12, true, false);
       ctx.fillStyle = card.color;
-      ctx.font = "bold 14px Inter";
+      ctx.font = getFont("bold", 14, true);
       ctx.fillText(card.label, cardXPos + 12, cardStartY + 25);
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 22px InterBold";
+      ctx.font = getFont("bold", 22, true);
       ctx.fillText(card.value, cardXPos + 12, cardStartY + 55);
       cardXPos += cardWidth + 15;
     }
@@ -179,18 +191,18 @@ module.exports = async (req, res) => {
     // PROGRESS BAR XP
     // =========================
     ctx.fillStyle = "#9ca3af";
-    ctx.font = "12px Inter";
+    ctx.font = getFont("normal", 12, true);
     ctx.fillText("⚡ PROGRESS XP", textX, currentY - 5);
     ctx.fillStyle = "rgba(255,255,255,0.2)";
     roundRect(ctx, textX, currentY, 420, 10, 10, true, false);
     ctx.fillStyle = accent;
     roundRect(ctx, textX, currentY, (xpPercent / 100) * 420, 10, 10, true, false);
     ctx.fillStyle = "#d1d5db";
-    ctx.font = "bold 10px Inter";
+    ctx.font = getFont("bold", 10, true);
     ctx.fillText(`${currentXp}/${maxXpVal} XP`, textX + 430, currentY + 8);
 
     // =========================
-    // ACCENT LINE BAWAH (gradien)
+    // ACCENT LINE BAWAH
     // =========================
     const gradAccent = ctx.createLinearGradient(cardX, cardY+cardH-8, cardX+cardW, cardY+cardH-8);
     gradAccent.addColorStop(0, accent);
@@ -199,7 +211,7 @@ module.exports = async (req, res) => {
     roundRect(ctx, cardX, cardY + cardH - 8, cardW, 6, 6, true, false);
 
     // =========================
-    // OUTPUT
+    // OUTPUT PNG
     // =========================
     const buffer = canvas.toBuffer("image/png");
     res.setHeader("Content-Type", "image/png");
