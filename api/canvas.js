@@ -12,7 +12,6 @@ try {
   GlobalFonts.register(regular, "Inter");
   GlobalFonts.register(bold, "InterBold");
 
-  // Registrasi font emoji (jika ada)
   try {
     const emoji = fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf"));
     GlobalFonts.register(emoji, "NotoColorEmoji");
@@ -25,7 +24,6 @@ try {
   console.log("FONT ERROR:", e.message);
 }
 
-// Helper untuk membuat font family dengan fallback emoji
 const getFont = (weight, size, useEmoji = true) => {
   const base = `${weight} ${size}px ${useEmoji && hasEmojiFont ? "'InterBold', 'NotoColorEmoji'" : "InterBold"}`;
   return base;
@@ -53,7 +51,6 @@ module.exports = async (req, res) => {
       maxXp = "100"
     } = req.query;
 
-    // Validasi & parsing
     const money = parseInt(uang) || 0;
     const lim = parseInt(limit) || 0;
     const currentXp = Math.min(parseInt(xp) || 0, parseInt(maxXp) || 100);
@@ -70,7 +67,7 @@ module.exports = async (req, res) => {
     const ctx = canvas.getContext("2d");
 
     // =========================
-    // BACKGROUND
+    // BACKGROUND (gambar atau gradasi)
     // =========================
     try {
       if (background) {
@@ -85,11 +82,12 @@ module.exports = async (req, res) => {
       ctx.fillRect(0, 0, width, height);
     }
 
-    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+    // OVERLAY GELAP RINGAN (opsional, biar teks lebih terbaca)
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
     ctx.fillRect(0, 0, width, height);
 
     // =========================
-    // CARD UTAMA
+    // CARD UTAMA - LEBIH TRANSPARAN
     // =========================
     const cardX = 40;
     const cardY = 40;
@@ -97,12 +95,14 @@ module.exports = async (req, res) => {
     const cardH = height - 80;
 
     ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = 20;
-    ctx.fillStyle = "rgba(30, 30, 46, 0.75)";
+    ctx.shadowBlur = 15;
+    // Ubah opacity dari 0.75 menjadi 0.5 agar background lebih terlihat
+    ctx.fillStyle = "rgba(30, 30, 46, 0.5)";
     roundRect(ctx, cardX, cardY, cardW, cardH, 24, true, false);
     ctx.shadowBlur = 0;
 
-    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    // Stroke tipis biar tetap ada batas card
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
     ctx.lineWidth = 1.5;
     roundRect(ctx, cardX, cardY, cardW, cardH, 24, false, true);
 
@@ -138,22 +138,20 @@ module.exports = async (req, res) => {
     ctx.restore();
 
     // =========================
-    // NAMA & RANK BADGE (DENGAN FONT EMOJI)
+    // NAMA & RANK BADGE
     // =========================
     const textX = avatarX + avatarSize + 35;
     let currentY = avatarY + 35;
 
     ctx.font = getFont("bold", 28, true);
     ctx.fillStyle = "#ffffff";
-    // Potong teks panjang (hindari overflow)
     let displayName = name.length > 20 ? name.slice(0, 18) + "..." : name;
     ctx.fillText(displayName, textX, currentY);
 
-    // Badge rank
     ctx.font = getFont("bold", 14, true);
     const rankText = rank.toUpperCase();
     const rankWidth = ctx.measureText(rankText).width + 20;
-    ctx.fillStyle = "rgba(124, 58, 237, 0.2)";
+    ctx.fillStyle = "rgba(124, 58, 237, 0.3)"; // sedikit lebih transparan
     roundRect(ctx, textX, currentY + 8, rankWidth, 24, 12, true, false);
     ctx.fillStyle = accent;
     ctx.fillText(rankText, textX + 10, currentY + 25);
@@ -174,7 +172,8 @@ module.exports = async (req, res) => {
     let cardXPos = textX;
     for (let i = 0; i < infoCards.length; i++) {
       const card = infoCards[i];
-      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      // Card info juga dibuat lebih transparan
+      ctx.fillStyle = "rgba(255,255,255,0.1)";
       roundRect(ctx, cardXPos, cardStartY, cardWidth, cardHeight, 12, true, false);
       ctx.fillStyle = card.color;
       ctx.font = getFont("bold", 14, true);
@@ -190,10 +189,10 @@ module.exports = async (req, res) => {
     // =========================
     // PROGRESS BAR XP
     // =========================
-    ctx.fillStyle = "#9ca3af";
+    ctx.fillStyle = "#e5e7eb";
     ctx.font = getFont("normal", 12, true);
     ctx.fillText("⚡ PROGRESS XP", textX, currentY - 5);
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
     roundRect(ctx, textX, currentY, 420, 10, 10, true, false);
     ctx.fillStyle = accent;
     roundRect(ctx, textX, currentY, (xpPercent / 100) * 420, 10, 10, true, false);
@@ -210,9 +209,6 @@ module.exports = async (req, res) => {
     ctx.fillStyle = gradAccent;
     roundRect(ctx, cardX, cardY + cardH - 8, cardW, 6, 6, true, false);
 
-    // =========================
-    // OUTPUT PNG
-    // =========================
     const buffer = canvas.toBuffer("image/png");
     res.setHeader("Content-Type", "image/png");
     res.send(buffer);
@@ -223,9 +219,6 @@ module.exports = async (req, res) => {
   }
 };
 
-// =========================
-// HELPER FUNCTIONS
-// =========================
 function roundRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
