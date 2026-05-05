@@ -275,8 +275,8 @@ module.exports = async (req, res) => {
       ctx.save(); ctx.fillStyle="rgba(255,255,255,0.28)";
       ctx.beginPath(); ctx.ellipse(sx+ST_W/2, sy+12, ST_W*0.4, 9, 0,0,Math.PI*2); ctx.fill(); ctx.restore();
 
-      ctx.fillStyle="rgba(60,20,60,0.5)"; ctx.font=F(11);
-      ctx.fillText(s.label, sx+14, sy+24);
+      ctx.fillStyle="rgba(255,255,255,0.92)"; ctx.font=F(14);
+      ctx.fillText(s.label, sx+14, sy+27);
 
       ctx.fillStyle=W; ctx.font=F(34);
       ctx.save(); ctx.shadowColor="rgba(0,0,0,0.15)"; ctx.shadowBlur=4;
@@ -290,11 +290,11 @@ module.exports = async (req, res) => {
     const BAR_W = RW;
 
     // label row
-    ctx.fillStyle="#3a2050"; ctx.font=F(13);
-    ctx.fillText("EXP", RX, EXP_Y + 14);
-    ctx.fillStyle="#9980aa"; ctx.font=F(11);
+    ctx.fillStyle="#3a2050"; ctx.font=F(15);
+    ctx.fillText("EXP", RX, EXP_Y + 15);
+    ctx.fillStyle="#6a4a8a"; ctx.font=F(13);
     ctx.textAlign="right";
-    ctx.fillText(`${fmt(curXp)} / ${fmt(maxXpVal)}`, RX + BAR_W, EXP_Y + 14);
+    ctx.fillText(`${fmt(curXp)} / ${fmt(maxXpVal)}`, RX + BAR_W, EXP_Y + 15);
     ctx.textAlign="left";
 
     const BAR_Y = EXP_Y + 20;
@@ -355,7 +355,7 @@ module.exports = async (req, res) => {
     // tiny stars in ribbon
     for (let i=0;i<9;i++) star(ctx, cX+45+i*(cW-90)/8, RIB_Y+RIB_H/2, 3, W, 0.5);
 
-    ctx.save(); ctx.fillStyle="rgba(60,20,60,0.5)"; ctx.font=F(11);
+    ctx.save(); ctx.fillStyle="rgba(60,20,60,0.75)"; ctx.font=F(13);
     ctx.textAlign="center";
     ctx.fillText("* * *  K E E P  L E V E L I N G  U P !  * * *", cX+cW/2, RIB_Y+23);
     ctx.textAlign="left"; ctx.restore();
