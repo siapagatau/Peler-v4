@@ -1,61 +1,45 @@
 const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
-const fs = require("fs");
+const fs   = require("fs");
 const path = require("path");
 
-// =========================
-// LOAD FONT
-// =========================
+// ── FONTS ────────────────────────────────────────────────────
 let hasEmojiFont = false;
 try {
-  const regular = fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf"));
-  const bold    = fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf"));
-  GlobalFonts.register(regular, "Inter");
-  GlobalFonts.register(bold,    "InterBold");
+  GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")), "Inter");
+  GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf")),    "InterBold");
   try {
-    const emoji = fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf"));
-    GlobalFonts.register(emoji, "NotoColorEmoji");
+    GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf")), "NotoColorEmoji");
     hasEmojiFont = true;
   } catch (_) {}
-} catch (e) {
-  console.log("FONT ERROR:", e.message);
-}
+} catch (e) { console.log("FONT ERROR:", e.message); }
 
-const getFont = (weight, size) => {
-  const family = hasEmojiFont ? "'InterBold','NotoColorEmoji'" : "InterBold";
-  return `${weight} ${size}px ${family}`;
-};
+const F = (size, bold = true) =>
+  `${bold ? "bold" : "normal"} ${size}px ${hasEmojiFont ? "'InterBold','NotoColorEmoji'" : "InterBold"}`;
 
-// =========================
-// HELPERS
-// =========================
-function roundRect(ctx, x, y, w, h, r, fill, stroke) {
-  const rr = Math.min(r, w / 2, h / 2);
+// ── HELPERS ──────────────────────────────────────────────────
+function rr(ctx, x, y, w, h, r, fill, stroke) {
+  r = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.lineTo(x + w - rr, y);
-  ctx.quadraticCurveTo(x + w, y,     x + w, y + rr);
-  ctx.lineTo(x + w, y + h - rr);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
-  ctx.lineTo(x + rr, y + h);
-  ctx.quadraticCurveTo(x, y + h,     x, y + h - rr);
-  ctx.lineTo(x, y + rr);
-  ctx.quadraticCurveTo(x, y,         x + rr, y);
+  ctx.moveTo(x + r, y);          ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x+w, y,   x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);        ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);          ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);            ctx.quadraticCurveTo(x, y, x+r, y);
   ctx.closePath();
   if (fill)   ctx.fill();
   if (stroke) ctx.stroke();
 }
 
-// 4-point star drawn on canvas (no unicode)
-function drawStar(ctx, cx, cy, size, color, alpha = 1) {
+function star(ctx, cx, cy, size, color, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = color;
+  ctx.fillStyle   = color;
   ctx.beginPath();
   for (let i = 0; i < 8; i++) {
-    const angle = (i * Math.PI) / 4;
-    const r = i % 2 === 0 ? size : size * 0.38;
-    const px = cx + Math.cos(angle - Math.PI / 2) * r;
-    const py = cy + Math.sin(angle - Math.PI / 2) * r;
+    const a  = (i * Math.PI) / 4;
+    const rv = i % 2 === 0 ? size : size * 0.38;
+    const px = cx + Math.cos(a - Math.PI / 2) * rv;
+    const py = cy + Math.sin(a - Math.PI / 2) * rv;
     i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
   }
   ctx.closePath();
@@ -63,17 +47,15 @@ function drawStar(ctx, cx, cy, size, color, alpha = 1) {
   ctx.restore();
 }
 
-function formatNumber(num) {
-  if (num >= 1e12) return (num / 1e12).toFixed(1).replace(/\.0$/, "") + "T";
-  if (num >= 1e9)  return (num / 1e9).toFixed(1).replace(/\.0$/, "")  + "B";
-  if (num >= 1e6)  return (num / 1e6).toFixed(1).replace(/\.0$/, "")  + "M";
-  if (num >= 1e3)  return (num / 1e3).toFixed(1).replace(/\.0$/, "")  + "K";
-  return num.toString();
+function fmt(n) {
+  if (n >= 1e12) return (n/1e12).toFixed(1).replace(/\.0$/,"")+"T";
+  if (n >= 1e9)  return (n/1e9 ).toFixed(1).replace(/\.0$/,"")+"B";
+  if (n >= 1e6)  return (n/1e6 ).toFixed(1).replace(/\.0$/,"")+"M";
+  if (n >= 1e3)  return (n/1e3 ).toFixed(1).replace(/\.0$/,"")+"K";
+  return String(n);
 }
 
-// =========================
-// MAIN HANDLER
-// =========================
+// ── HANDLER ──────────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -82,453 +64,294 @@ module.exports = async (req, res) => {
 
   try {
     let {
-      name       = "User",
-      uang       = "0",
-      limit      = "0",
-      rank       = "Member",
-      avatar     = "https://cdn.discordapp.com/embed/avatars/0.png",
+      name   = "User",
+      uang   = "0",
+      limit  = "0",
+      rank   = "Member",
+      avatar = "https://cdn.discordapp.com/embed/avatars/0.png",
       background = "",
-      accent     = "#ff6eb4",
-      level      = "1",
-      xp         = "0",
-      maxXp      = "100",
-      bio        = "No bio yet.",
-      badge1     = "Active",
-      badge2     = "Friendly",
-      badge3     = "Top Player",
+      accent = "#ff6eb4",
+      level  = "1",
+      xp     = "0",
+      maxXp  = "100",
     } = req.query;
 
-    const money     = parseInt(uang)  || 0;
-    const lim       = parseInt(limit) || 0;
-    const currentXp = Math.min(parseInt(xp) || 0, parseInt(maxXp) || 100);
-    const maxXpVal  = parseInt(maxXp) || 100;
-    const xpPercent = Math.max(0, Math.min(100, (currentXp / maxXpVal) * 100));
-    if (!accent || !/^#([0-9A-F]{3,6})$/i.test(accent)) accent = "#ff6eb4";
+    const money    = parseInt(uang)  || 0;
+    const lim      = parseInt(limit) || 0;
+    const curXp    = Math.min(parseInt(xp)||0, parseInt(maxXp)||100);
+    const maxXpVal = parseInt(maxXp) || 100;
+    const xpPct    = Math.max(0, Math.min(100, (curXp / maxXpVal) * 100));
+    if (!/^#[0-9A-F]{3,6}$/i.test(accent)) accent = "#ff6eb4";
 
-    // Palette
-    const PINK     = "#ff85c2";
-    const MINT     = "#7de8c0";
-    const SKY      = "#85c8ff";
-    const YELLOW   = "#ffd96e";
-    const LAVENDER = "#c485ff";
-    const WHITE    = "#ffffff";
-    const DARK     = "#3a2050";
+    // palette
+    const PINK = "#ff85c2", MINT = "#7de8c0", SKY = "#85c8ff",
+          YEL  = "#ffd96e", LAV  = "#c485ff", PEA = "#ffb085", W = "#fff";
 
-    // Canvas
-    const W = 820, H = 420;
-    const canvas = createCanvas(W, H);
+    const W_C = 820, H_C = 400;
+    const canvas = createCanvas(W_C, H_C);
     const ctx    = canvas.getContext("2d");
 
-    // ── 1. BACKGROUND ──────────────────────────────────────────
+    // ── BACKGROUND ─────────────────────────────────────────────
     if (background) {
       try {
         const bg = await loadImage(background);
-        ctx.drawImage(bg, 0, 0, W, H);
-        ctx.fillStyle = "rgba(0,0,0,0.35)";
-        ctx.fillRect(0, 0, W, H);
+        ctx.drawImage(bg, 0, 0, W_C, H_C);
+        ctx.fillStyle = "rgba(0,0,0,0.38)";
+        ctx.fillRect(0, 0, W_C, H_C);
       } catch { background = ""; }
     }
     if (!background) {
-      const bgG = ctx.createLinearGradient(0, 0, W, H);
-      bgG.addColorStop(0,   "#ffdaf0");
-      bgG.addColorStop(0.5, "#e0eaff");
-      bgG.addColorStop(1,   "#d4f5e9");
-      ctx.fillStyle = bgG;
-      ctx.fillRect(0, 0, W, H);
+      const g = ctx.createLinearGradient(0, 0, W_C, H_C);
+      g.addColorStop(0,   "#ffdaf0");
+      g.addColorStop(0.5, "#e0eaff");
+      g.addColorStop(1,   "#d4f5e9");
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W_C, H_C);
     }
 
-    // soft blobs
-    const blobs = [
-      { x: 0,   y: 0,   r: 140, c: "rgba(255,180,220,0.28)" },
-      { x: W,   y: 0,   r: 120, c: "rgba(180,210,255,0.28)" },
-      { x: W,   y: H,   r: 150, c: "rgba(180,245,215,0.25)" },
-      { x: 0,   y: H,   r: 110, c: "rgba(255,215,180,0.28)" },
-      { x: W/2, y: H/2, r: 200, c: "rgba(220,200,255,0.12)" },
-    ];
-    for (const b of blobs) {
+    // bg blobs
+    [[0,0,130,"rgba(255,175,215,0.3)"],[W_C,0,110,"rgba(175,205,255,0.3)"],
+     [W_C,H_C,140,"rgba(175,240,210,0.28)"],[0,H_C,105,"rgba(255,210,175,0.28)"]
+    ].forEach(([bx,by,br,bc]) => {
       ctx.save();
-      const rg = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
-      rg.addColorStop(0, b.c);
-      rg.addColorStop(1, "rgba(255,255,255,0)");
+      const rg = ctx.createRadialGradient(bx,by,0,bx,by,br);
+      rg.addColorStop(0, bc); rg.addColorStop(1,"rgba(255,255,255,0)");
       ctx.fillStyle = rg;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fill();
       ctx.restore();
-    }
+    });
 
-    // ── 2. CARD ─────────────────────────────────────────────────
-    const cX = 24, cY = 20, cW = W - 48, cH = H - 40;
+    // ── CARD ────────────────────────────────────────────────────
+    const cX=22, cY=18, cW=W_C-44, cH=H_C-36;
 
     ctx.save();
-    ctx.shadowColor   = "rgba(160,100,200,0.22)";
-    ctx.shadowBlur    = 28;
-    ctx.shadowOffsetY = 6;
-    ctx.fillStyle     = "rgba(255,255,255,0.86)";
-    roundRect(ctx, cX, cY, cW, cH, 28, true, false);
+    ctx.shadowColor="rgba(150,90,200,0.2)"; ctx.shadowBlur=30; ctx.shadowOffsetY=7;
+    ctx.fillStyle="rgba(255,255,255,0.88)";
+    rr(ctx, cX, cY, cW, cH, 30, true, false);
     ctx.restore();
 
     // rainbow border
     ctx.save();
-    const bGrad = ctx.createLinearGradient(cX, cY, cX + cW, cY + cH);
-    bGrad.addColorStop(0,    PINK);
-    bGrad.addColorStop(0.33, SKY);
-    bGrad.addColorStop(0.66, MINT);
-    bGrad.addColorStop(1,    YELLOW);
-    ctx.strokeStyle = bGrad;
-    ctx.lineWidth   = 2.5;
-    ctx.globalAlpha = 0.6;
-    roundRect(ctx, cX, cY, cW, cH, 28, false, true);
+    const bg2 = ctx.createLinearGradient(cX,cY,cX+cW,cY+cH);
+    bg2.addColorStop(0,PINK); bg2.addColorStop(0.33,SKY);
+    bg2.addColorStop(0.66,MINT); bg2.addColorStop(1,YEL);
+    ctx.strokeStyle=bg2; ctx.lineWidth=2.5; ctx.globalAlpha=0.55;
+    rr(ctx, cX, cY, cW, cH, 30, false, true);
     ctx.restore();
 
-    // ── 3. COLUMN LAYOUT ───────────────────────────────────────
-    const COL1_W     = 200;
-    const COL2_X     = cX + COL1_W + 20;
-    const COL2_W     = cW - COL1_W - 20;
-    const CONTENT_TOP = cY + 26;
+    // ── AVATAR (left, vertically centered) ─────────────────────
+    // Avatar column: x=cX to cX+220
+    // Right content: x=cX+230
+    const AV_CX = cX + 110;
+    const AV_CY = cY + cH / 2;
+    const AV_R  = 82;
 
-    // ── 4. AVATAR ────────────────────────────────────────────────
-    const avR  = 68;
-    const avCX = cX + COL1_W / 2;
-    const avCY = cY + cH / 2 - 16;
-
-    // glow ring
+    // glow
     ctx.save();
-    const ringG = ctx.createLinearGradient(avCX - avR, avCY - avR, avCX + avR, avCY + avR);
-    ringG.addColorStop(0,   PINK);
-    ringG.addColorStop(0.5, LAVENDER);
-    ringG.addColorStop(1,   SKY);
-    ctx.strokeStyle = ringG;
-    ctx.lineWidth   = 5;
-    ctx.shadowColor = "rgba(255,100,180,0.5)";
-    ctx.shadowBlur  = 14;
-    ctx.beginPath();
-    ctx.arc(avCX, avCY, avR + 6, 0, Math.PI * 2);
-    ctx.stroke();
+    const rg2 = ctx.createLinearGradient(AV_CX-AV_R, AV_CY-AV_R, AV_CX+AV_R, AV_CY+AV_R);
+    rg2.addColorStop(0,PINK); rg2.addColorStop(0.5,LAV); rg2.addColorStop(1,SKY);
+    ctx.strokeStyle=rg2; ctx.lineWidth=6;
+    ctx.shadowColor="rgba(255,100,180,0.55)"; ctx.shadowBlur=18;
+    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R+7, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
 
-    // white gap
     ctx.save();
-    ctx.strokeStyle = WHITE;
-    ctx.lineWidth   = 3;
-    ctx.beginPath();
-    ctx.arc(avCX, avCY, avR + 2, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.strokeStyle=W; ctx.lineWidth=3.5;
+    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R+2, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
 
-    // avatar image
-    let avatarImg;
-    try   { avatarImg = await loadImage(avatar); }
-    catch { avatarImg = await loadImage("https://cdn.discordapp.com/embed/avatars/0.png"); }
+    let avImg;
+    try   { avImg = await loadImage(avatar); }
+    catch { avImg = await loadImage("https://cdn.discordapp.com/embed/avatars/0.png"); }
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(avCX, avCY, avR, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(avatarImg, avCX - avR, avCY - avR, avR * 2, avR * 2);
+    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R, 0, Math.PI*2); ctx.clip();
+    ctx.drawImage(avImg, AV_CX-AV_R, AV_CY-AV_R, AV_R*2, AV_R*2);
     ctx.restore();
 
     // canvas sparkles around avatar
-    drawStar(ctx, avCX - avR - 14, avCY - 20,     5, YELLOW,   0.9);
-    drawStar(ctx, avCX + avR + 12, avCY - 32,     4, PINK,     0.9);
-    drawStar(ctx, avCX + avR + 8,  avCY + 28,     5, MINT,     0.85);
-    drawStar(ctx, avCX - avR - 10, avCY + 30,     4, SKY,      0.85);
-    drawStar(ctx, avCX,            avCY - avR - 18, 4, LAVENDER, 0.8);
+    star(ctx, AV_CX - AV_R - 16, AV_CY - 28,      6, YEL,  0.9);
+    star(ctx, AV_CX + AV_R + 14, AV_CY - 38,      5, PINK, 0.9);
+    star(ctx, AV_CX + AV_R + 10, AV_CY + 34,      6, MINT, 0.85);
+    star(ctx, AV_CX - AV_R - 12, AV_CY + 36,      5, SKY,  0.85);
+    star(ctx, AV_CX,             AV_CY - AV_R - 20, 5, LAV, 0.8);
 
-    // Level badge under avatar
-    const lvlText = `Lv. ${level}`;
-    ctx.font = getFont("bold", 13);
-    const lvlW = ctx.measureText(lvlText).width + 28;
-    const lvlX = avCX - lvlW / 2;
-    const lvlY = avCY + avR + 10;
-
-    ctx.save();
-    ctx.shadowColor = "rgba(255,190,50,0.55)";
-    ctx.shadowBlur  = 10;
-    const lvlG = ctx.createLinearGradient(lvlX, lvlY, lvlX + lvlW, lvlY + 24);
-    lvlG.addColorStop(0, "#ffe569");
-    lvlG.addColorStop(1, "#ffa94d");
-    ctx.fillStyle = lvlG;
-    roundRect(ctx, lvlX, lvlY, lvlW, 24, 12, true, false);
-    ctx.restore();
+    // level badge
+    const lvTxt = `Lv. ${level}`;
+    ctx.font = F(14);
+    const lvW = ctx.measureText(lvTxt).width + 30;
+    const lvX = AV_CX - lvW/2, lvY = AV_CY + AV_R + 12;
 
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.8)";
-    ctx.lineWidth   = 1.5;
-    roundRect(ctx, lvlX, lvlY, lvlW, 24, 12, false, true);
+    ctx.shadowColor="rgba(255,190,50,0.6)"; ctx.shadowBlur=12;
+    const lg = ctx.createLinearGradient(lvX, lvY, lvX+lvW, lvY+28);
+    lg.addColorStop(0,"#ffe569"); lg.addColorStop(1,"#ffa94d");
+    ctx.fillStyle=lg; rr(ctx,lvX,lvY,lvW,28,14,true,false);
     ctx.restore();
+    ctx.save(); ctx.strokeStyle="rgba(255,255,255,0.8)"; ctx.lineWidth=1.5;
+    rr(ctx,lvX,lvY,lvW,28,14,false,true); ctx.restore();
+    ctx.fillStyle="#4a2800"; ctx.font=F(14);
+    ctx.textAlign="center"; ctx.fillText(lvTxt, AV_CX, lvY+19); ctx.textAlign="left";
 
-    ctx.fillStyle = "#4a2800";
-    ctx.font      = getFont("bold", 13);
-    ctx.textAlign = "center";
-    ctx.fillText(lvlText, avCX, lvlY + 16);
-    ctx.textAlign = "left";
+    // ── RIGHT CONTENT ───────────────────────────────────────────
+    const RX  = cX + 230;   // left edge of right section
+    const RW  = cW - 230 - 16; // available width
 
-    // ── 5. RIGHT COLUMN ──────────────────────────────────────────
-    let ry = CONTENT_TOP;
-
-    // Row A: Name + Rank pill
-    const displayName = name.length > 18 ? name.slice(0, 16) + "..." : name;
-    ctx.font      = getFont("bold", 30);
-    ctx.fillStyle = DARK;
+    // -- NAME --
+    const nameText = name.length > 16 ? name.slice(0,14)+"..." : name;
+    ctx.font = F(42);
     ctx.save();
-    ctx.shadowColor = "rgba(200,100,180,0.2)";
-    ctx.shadowBlur  = 6;
-    ctx.fillText(displayName, COL2_X, ry + 28);
+    ctx.fillStyle = "#3a2050";
+    ctx.shadowColor="rgba(200,100,180,0.18)"; ctx.shadowBlur=8;
+    ctx.fillText(nameText, RX, cY + 68);
     ctx.restore();
 
-    const rankLabel = rank.toUpperCase();
-    ctx.font = getFont("bold", 11);
-    const rkW = ctx.measureText(rankLabel).width + 22;
-    const rankColors = {
-      OWNER:   { bg: "#ff5e5e", txt: WHITE },
-      ADMIN:   { bg: "#ff9f43", txt: WHITE },
-      VIP:     { bg: "#a29bfe", txt: WHITE },
-      PREMIUM: { bg: "#fd79a8", txt: WHITE },
-      GOLD:    { bg: "#ffd32a", txt: "#4a3000" },
-      MEMBER:  { bg: "#74b9ff", txt: WHITE },
+    // -- RANK PILL (top right of card) --
+    const rkLabel = rank.toUpperCase();
+    ctx.font = F(13);
+    const rkW = ctx.measureText(rkLabel).width + 28;
+    const RANK_COLORS = {
+      OWNER:   {bg:"#ff5e5e", txt:W},   ADMIN: {bg:"#ff9f43", txt:W},
+      VIP:     {bg:"#a29bfe", txt:W},   PREMIUM:{bg:"#fd79a8",txt:W},
+      GOLD:    {bg:"#ffd32a", txt:"#4a3000"}, MEMBER:{bg:"#74b9ff",txt:W},
     };
-    const rk  = rankColors[rankLabel] || { bg: PINK, txt: WHITE };
-    const rkX = COL2_X + COL2_W - rkW - 16;
-    const rkY = ry + 8;
+    const rkC = RANK_COLORS[rkLabel] || {bg:PINK, txt:W};
+    const rkX = cX + cW - rkW - 20, rkY = cY + 20;
 
     ctx.save();
-    ctx.shadowColor = rk.bg + "66";
-    ctx.shadowBlur  = 8;
-    ctx.fillStyle   = rk.bg;
-    roundRect(ctx, rkX, rkY, rkW, 22, 11, true, false);
+    ctx.shadowColor=rkC.bg+"77"; ctx.shadowBlur=10;
+    ctx.fillStyle=rkC.bg; rr(ctx,rkX,rkY,rkW,30,15,true,false);
     ctx.restore();
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.6)";
-    ctx.lineWidth   = 1.2;
-    roundRect(ctx, rkX, rkY, rkW, 22, 11, false, true);
-    ctx.restore();
-    ctx.fillStyle = rk.txt;
-    ctx.font      = getFont("bold", 11);
-    ctx.textAlign = "center";
-    ctx.fillText(rankLabel, rkX + rkW / 2, rkY + 15);
-    ctx.textAlign = "left";
+    ctx.save(); ctx.strokeStyle="rgba(255,255,255,0.6)"; ctx.lineWidth=1.5;
+    rr(ctx,rkX,rkY,rkW,30,15,false,true); ctx.restore();
+    // shine
+    ctx.save(); ctx.fillStyle="rgba(255,255,255,0.25)";
+    ctx.beginPath(); ctx.ellipse(rkX+rkW/2, rkY+8, rkW*0.38, 5, 0,0,Math.PI*2); ctx.fill(); ctx.restore();
+    ctx.fillStyle=rkC.txt; ctx.font=F(13);
+    ctx.textAlign="center"; ctx.fillText(rkLabel, rkX+rkW/2, rkY+20); ctx.textAlign="left";
 
-    ry += 44;
+    // -- STAT CARDS --
+    // 3 cards: Coins, Limit, Level — fill full width, tall enough to feel big
+    const ST_Y = cY + 84;
+    const ST_H = 90;
+    const ST_GAP = 12;
+    const ST_W = Math.floor((RW - ST_GAP * 2) / 3);
 
-    // Row B: Stat Cards (Coins, Limit, Level)
-    const statDefs = [
-      { label: "Coins", value: formatNumber(money), g: ["#ff85c2","#ffb3de"], sh: "rgba(255,100,180,0.3)" },
-      { label: "Limit", value: formatNumber(lim),   g: ["#ffd085","#ffb085"], sh: "rgba(255,160,80,0.3)"  },
-      { label: "Level", value: String(level),        g: ["#a29bfe","#85c8ff"], sh: "rgba(130,100,255,0.3)"},
+    const stats = [
+      { label:"COINS", value:fmt(money), g:["#ff85c2","#ffa8d8"], sh:"rgba(255,100,180,0.35)" },
+      { label:"LIMIT", value:fmt(lim),   g:["#ffd085","#ffb87a"], sh:"rgba(255,160,70,0.35)"  },
+      { label:"LEVEL", value:String(level), g:["#a29bfe","#78b8ff"], sh:"rgba(130,100,255,0.3)"},
     ];
-    const scH   = 62;
-    const scGap = 10;
-    const scW   = Math.floor((COL2_W - scGap * 2 - 16) / 3);
 
-    for (let i = 0; i < statDefs.length; i++) {
-      const sc  = statDefs[i];
-      const scX = COL2_X + i * (scW + scGap);
-      const scY = ry;
+    for (let i = 0; i < 3; i++) {
+      const s  = stats[i];
+      const sx = RX + i * (ST_W + ST_GAP);
+      const sy = ST_Y;
 
       ctx.save();
-      ctx.shadowColor   = sc.sh;
-      ctx.shadowBlur    = 10;
-      ctx.shadowOffsetY = 3;
-      const scG = ctx.createLinearGradient(scX, scY, scX + scW, scY + scH);
-      scG.addColorStop(0, sc.g[0]);
-      scG.addColorStop(1, sc.g[1]);
-      ctx.fillStyle = scG;
-      roundRect(ctx, scX, scY, scW, scH, 16, true, false);
+      ctx.shadowColor=s.sh; ctx.shadowBlur=14; ctx.shadowOffsetY=4;
+      const sg = ctx.createLinearGradient(sx,sy,sx+ST_W,sy+ST_H);
+      sg.addColorStop(0,s.g[0]); sg.addColorStop(1,s.g[1]);
+      ctx.fillStyle=sg; rr(ctx,sx,sy,ST_W,ST_H,20,true,false);
       ctx.restore();
 
-      ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.65)";
-      ctx.lineWidth   = 1.5;
-      roundRect(ctx, scX, scY, scW, scH, 16, false, true);
-      ctx.restore();
+      ctx.save(); ctx.strokeStyle="rgba(255,255,255,0.7)"; ctx.lineWidth=2;
+      rr(ctx,sx,sy,ST_W,ST_H,20,false,true); ctx.restore();
 
-      // shine
-      ctx.save();
-      ctx.fillStyle = "rgba(255,255,255,0.22)";
-      ctx.beginPath();
-      ctx.ellipse(scX + scW * 0.5, scY + 10, scW * 0.36, 7, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      // top shine strip
+      ctx.save(); ctx.fillStyle="rgba(255,255,255,0.28)";
+      ctx.beginPath(); ctx.ellipse(sx+ST_W/2, sy+12, ST_W*0.4, 9, 0,0,Math.PI*2); ctx.fill(); ctx.restore();
 
-      ctx.fillStyle = "rgba(60,20,60,0.5)";
-      ctx.font      = getFont("bold", 10);
-      ctx.fillText(sc.label.toUpperCase(), scX + 10, scY + 18);
+      ctx.fillStyle="rgba(60,20,60,0.5)"; ctx.font=F(11);
+      ctx.fillText(s.label, sx+14, sy+24);
 
-      ctx.fillStyle = WHITE;
-      ctx.font      = getFont("bold", 22);
-      ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.15)";
-      ctx.shadowBlur  = 3;
-      ctx.fillText(sc.value, scX + 10, scY + 48);
-      ctx.restore();
+      ctx.fillStyle=W; ctx.font=F(34);
+      ctx.save(); ctx.shadowColor="rgba(0,0,0,0.15)"; ctx.shadowBlur=4;
+      ctx.fillText(s.value, sx+14, sy+72); ctx.restore();
     }
 
-    ry += scH + 12;
+    // -- EXP BAR --
+    const EXP_Y = ST_Y + ST_H + 18;
+    const BAR_H = 22;
+    const BAR_W = RW;
 
-    // Row C: EXP bar
-    const barW = COL2_W - 16;
-    const barH = 16;
+    // label row
+    ctx.fillStyle="#3a2050"; ctx.font=F(13);
+    ctx.fillText("EXP", RX, EXP_Y + 14);
+    ctx.fillStyle="#9980aa"; ctx.font=F(11);
+    ctx.textAlign="right";
+    ctx.fillText(`${fmt(curXp)} / ${fmt(maxXpVal)}`, RX + BAR_W, EXP_Y + 14);
+    ctx.textAlign="left";
 
-    ctx.fillStyle = DARK;
-    ctx.font      = getFont("bold", 11);
-    ctx.fillText("EXP", COL2_X, ry + 11);
-
-    const xpLabel = `${formatNumber(currentXp)} / ${formatNumber(maxXpVal)}`;
-    ctx.font      = getFont("bold", 10);
-    ctx.fillStyle = "#9980aa";
-    ctx.textAlign = "right";
-    ctx.fillText(xpLabel, COL2_X + barW, ry + 11);
-    ctx.textAlign = "left";
-    ry += 16;
+    const BAR_Y = EXP_Y + 20;
 
     // track
-    ctx.save();
-    ctx.fillStyle = "rgba(200,180,230,0.35)";
-    roundRect(ctx, COL2_X, ry, barW, barH, barH / 2, true, false);
-    ctx.restore();
+    ctx.save(); ctx.fillStyle="rgba(200,180,230,0.38)";
+    rr(ctx, RX, BAR_Y, BAR_W, BAR_H, BAR_H/2, true, false); ctx.restore();
 
     // fill
-    const fillW = Math.max((xpPercent / 100) * barW, xpPercent > 0 ? barH : 0);
+    const fillW = Math.max((xpPct/100)*BAR_W, xpPct>0 ? BAR_H : 0);
     if (fillW > 0) {
       ctx.save();
-      const xG = ctx.createLinearGradient(COL2_X, ry, COL2_X + barW, ry);
-      xG.addColorStop(0,   "#ff85c2");
-      xG.addColorStop(0.4, "#c485ff");
-      xG.addColorStop(0.8, "#85c8ff");
-      xG.addColorStop(1,   "#7de8c0");
-      ctx.fillStyle   = xG;
-      ctx.shadowColor = "rgba(190,100,255,0.45)";
-      ctx.shadowBlur  = 7;
-      roundRect(ctx, COL2_X, ry, fillW, barH, barH / 2, true, false);
-      ctx.restore();
-
-      ctx.save();
-      ctx.fillStyle = "rgba(255,255,255,0.3)";
-      roundRect(ctx, COL2_X + 2, ry + 2, Math.max(fillW - 4, 0), barH / 2 - 2, (barH / 2 - 2) / 2, true, false);
-      ctx.restore();
+      const xg = ctx.createLinearGradient(RX, BAR_Y, RX+BAR_W, BAR_Y);
+      xg.addColorStop(0,"#ff85c2"); xg.addColorStop(0.4,"#c485ff");
+      xg.addColorStop(0.8,"#85c8ff"); xg.addColorStop(1,"#7de8c0");
+      ctx.fillStyle=xg; ctx.shadowColor="rgba(190,100,255,0.5)"; ctx.shadowBlur=8;
+      rr(ctx, RX, BAR_Y, fillW, BAR_H, BAR_H/2, true, false); ctx.restore();
+      // shine
+      ctx.save(); ctx.fillStyle="rgba(255,255,255,0.3)";
+      rr(ctx, RX+2, BAR_Y+3, Math.max(fillW-4,0), BAR_H/2-3, (BAR_H/2-3)/2, true, false); ctx.restore();
     }
 
     // ticks
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.4)";
-    ctx.lineWidth   = 1.2;
-    for (let i = 1; i < 10; i++) {
-      const sx = COL2_X + (barW / 10) * i;
-      ctx.beginPath(); ctx.moveTo(sx, ry + 3); ctx.lineTo(sx, ry + barH - 3); ctx.stroke();
+    ctx.save(); ctx.strokeStyle="rgba(255,255,255,0.45)"; ctx.lineWidth=1.5;
+    for (let i=1;i<10;i++) {
+      const sx=RX+(BAR_W/10)*i;
+      ctx.beginPath(); ctx.moveTo(sx,BAR_Y+4); ctx.lineTo(sx,BAR_Y+BAR_H-4); ctx.stroke();
     }
     ctx.restore();
 
-    ry += barH + 6;
-
-    // pct pill
-    const pctStr = `${Math.round(xpPercent)}%`;
-    ctx.font = getFont("bold", 10);
-    const pctW = ctx.measureText(pctStr).width + 14;
+    // pct pill (right side of bar)
+    const pctTxt = `${Math.round(xpPct)}%`;
+    ctx.font = F(11);
+    const ptW = ctx.measureText(pctTxt).width + 18;
+    const ptX = RX + BAR_W - ptW;
+    const ptY = BAR_Y + BAR_H + 8;
     ctx.save();
-    ctx.fillStyle = "rgba(190,150,240,0.2)";
-    roundRect(ctx, COL2_X, ry, pctW, 17, 8, true, false);
-    ctx.fillStyle = LAVENDER;
-    ctx.fillText(pctStr, COL2_X + 7, ry + 12);
-    ctx.restore();
+    ctx.fillStyle="rgba(190,150,240,0.22)"; rr(ctx,ptX,ptY,ptW,20,10,true,false);
+    ctx.fillStyle=LAV; ctx.fillText(pctTxt, ptX+9, ptY+14); ctx.restore();
 
-    ry += 24;
-
-    // Row D: Bio
-    const bioText = (bio || "No bio yet.").slice(0, 60);
-    ctx.fillStyle = "#8870a0";
-    ctx.font      = getFont("normal", 11);
-    const words = bioText.split(" ");
-    let line1 = "", line2 = "", switched = false;
-    for (const w of words) {
-      const test = line1 ? line1 + " " + w : w;
-      if (!switched && ctx.measureText(test).width < barW) {
-        line1 = test;
-      } else {
-        switched = true;
-        const t2 = line2 ? line2 + " " + w : w;
-        if (ctx.measureText(t2).width < barW) line2 = t2;
-      }
-    }
-    ctx.fillText(line1, COL2_X, ry + 12);
-    if (line2) ctx.fillText(line2, COL2_X, ry + 26);
-    ry += line2 ? 38 : 22;
-
-    // Row E: Badge pills
-    const badges      = [badge1, badge2, badge3].filter(Boolean);
-    const badgeColors = [
-      { bg: "rgba(255,133,194,0.18)", border: PINK,    txt: "#b0005e" },
-      { bg: "rgba(133,200,255,0.18)", border: SKY,     txt: "#0050a0" },
-      { bg: "rgba(125,232,192,0.18)", border: MINT,    txt: "#005838" },
-    ];
-    let bx = COL2_X;
-    for (let i = 0; i < badges.length; i++) {
-      const label = badges[i].slice(0, 14);
-      ctx.font = getFont("bold", 10);
-      const bw = ctx.measureText(label).width + 20;
-      const bc = badgeColors[i % badgeColors.length];
-      ctx.save();
-      ctx.fillStyle = bc.bg;
-      roundRect(ctx, bx, ry, bw, 22, 11, true, false);
-      ctx.strokeStyle = bc.border;
-      ctx.lineWidth   = 1.2;
-      ctx.globalAlpha = 0.7;
-      roundRect(ctx, bx, ry, bw, 22, 11, false, true);
-      ctx.restore();
-      ctx.fillStyle = bc.txt;
-      ctx.font      = getFont("bold", 10);
-      ctx.fillText(label, bx + 10, ry + 15);
-      bx += bw + 8;
-      if (bx > COL2_X + barW - 40) break;
-    }
-
-    // ── 6. BOTTOM RIBBON ─────────────────────────────────────────
-    const ribH = 34;
-    const ribY = cY + cH - ribH;
-    const ribG = ctx.createLinearGradient(cX, ribY, cX + cW, ribY);
-    ribG.addColorStop(0,    "rgba(255,150,210,0.65)");
-    ribG.addColorStop(0.25, "rgba(200,160,255,0.65)");
-    ribG.addColorStop(0.5,  "rgba(150,200,255,0.65)");
-    ribG.addColorStop(0.75, "rgba(150,240,210,0.65)");
-    ribG.addColorStop(1,    "rgba(255,230,150,0.65)");
-    ctx.fillStyle = ribG;
-
+    // ── BOTTOM RIBBON ────────────────────────────────────────────
+    const RIB_H = 36;
+    const RIB_Y = cY + cH - RIB_H;
+    const ribG  = ctx.createLinearGradient(cX, RIB_Y, cX+cW, RIB_Y);
+    ribG.addColorStop(0,   "rgba(255,150,210,0.65)");
+    ribG.addColorStop(0.25,"rgba(200,160,255,0.65)");
+    ribG.addColorStop(0.5, "rgba(150,200,255,0.65)");
+    ribG.addColorStop(0.75,"rgba(150,240,210,0.65)");
+    ribG.addColorStop(1,   "rgba(255,230,150,0.65)");
+    ctx.fillStyle=ribG;
     ctx.beginPath();
-    ctx.moveTo(cX, ribY);
-    ctx.lineTo(cX + cW, ribY);
-    ctx.lineTo(cX + cW, cY + cH - 28);
-    ctx.quadraticCurveTo(cX + cW, cY + cH, cX + cW - 28, cY + cH);
-    ctx.lineTo(cX + 28, cY + cH);
-    ctx.quadraticCurveTo(cX, cY + cH, cX, cY + cH - 28);
-    ctx.lineTo(cX, ribY);
-    ctx.closePath();
-    ctx.fill();
+    ctx.moveTo(cX, RIB_Y);
+    ctx.lineTo(cX+cW, RIB_Y);
+    ctx.lineTo(cX+cW, cY+cH-28); ctx.quadraticCurveTo(cX+cW, cY+cH, cX+cW-28, cY+cH);
+    ctx.lineTo(cX+28, cY+cH);    ctx.quadraticCurveTo(cX, cY+cH, cX, cY+cH-28);
+    ctx.lineTo(cX, RIB_Y); ctx.closePath(); ctx.fill();
 
-    // sparkle dots in ribbon
-    for (let i = 0; i < 7; i++) {
-      const sx = cX + 55 + i * (cW - 110) / 6;
-      drawStar(ctx, sx, ribY + ribH / 2, 3.5, WHITE, 0.55);
-    }
+    // tiny stars in ribbon
+    for (let i=0;i<9;i++) star(ctx, cX+45+i*(cW-90)/8, RIB_Y+RIB_H/2, 3, W, 0.5);
 
-    // ribbon text — ASCII only
-    ctx.save();
-    ctx.fillStyle = "rgba(60,20,60,0.55)";
-    ctx.font      = getFont("bold", 11);
-    ctx.textAlign = "center";
-    ctx.fillText("* * *  K E E P  L E V E L I N G  U P !  * * *", cX + cW / 2, ribY + 22);
-    ctx.textAlign = "left";
-    ctx.restore();
+    ctx.save(); ctx.fillStyle="rgba(60,20,60,0.5)"; ctx.font=F(11);
+    ctx.textAlign="center";
+    ctx.fillText("* * *  K E E P  L E V E L I N G  U P !  * * *", cX+cW/2, RIB_Y+23);
+    ctx.textAlign="left"; ctx.restore();
 
-    // corner sparkles (canvas drawn)
-    drawStar(ctx, cX + 18,      cY + 18,      5, PINK,   0.65);
-    drawStar(ctx, cX + cW - 18, cY + 18,      4, SKY,    0.65);
-    drawStar(ctx, cX + 18,      cY + cH - 18, 4, YELLOW, 0.65);
-    drawStar(ctx, cX + cW - 18, cY + cH - 18, 5, MINT,   0.65);
+    // corner stars
+    star(ctx, cX+16,      cY+16,      5, PINK, 0.6);
+    star(ctx, cX+cW-16,   cY+16,      4, SKY,  0.6);
+    star(ctx, cX+16,      cY+cH-16,   4, YEL,  0.6);
+    star(ctx, cX+cW-16,   cY+cH-16,   5, MINT, 0.6);
 
-    // ── SEND ────────────────────────────────────────────────────
-    const buffer = canvas.toBuffer("image/png");
-    res.setHeader("Content-Type", "image/png");
-    res.send(buffer);
+    res.setHeader("Content-Type","image/png");
+    res.send(canvas.toBuffer("image/png"));
 
   } catch (err) {
     console.error(err);
