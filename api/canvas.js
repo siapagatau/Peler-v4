@@ -192,8 +192,23 @@ module.exports = async (req, res) => {
     ctx.textAlign="center"; ctx.fillText(lvTxt, AV_CX, lvY+19); ctx.textAlign="left";
 
     // ── RIGHT CONTENT ───────────────────────────────────────────
-    const RX  = cX + 230;   // left edge of right section
-    const RW  = cW - 230 - 16; // available width
+    const RX = cX + 230;
+    const RW = cW - 230 - 16;
+
+    // Total height of all right-side elements:
+    // Name: 42px line height ~50
+    // Gap: 14
+    // Stat cards: 90
+    // Gap: 18
+    // EXP label row: 18
+    // EXP bar: 22
+    // Gap: 8
+    // pct pill: 20
+    // Total ~240px → start from card center minus half
+    const TOTAL_H = 50 + 14 + 90 + 18 + 18 + 22 + 8 + 20;
+    const cardMidY = cY + cH / 2;
+    // Push up slightly so ribbon gap is accounted for
+    let ry = cardMidY - TOTAL_H / 2 - 8;
 
     // -- NAME --
     const nameText = name.length > 16 ? name.slice(0,14)+"..." : name;
@@ -201,8 +216,9 @@ module.exports = async (req, res) => {
     ctx.save();
     ctx.fillStyle = "#3a2050";
     ctx.shadowColor="rgba(200,100,180,0.18)"; ctx.shadowBlur=8;
-    ctx.fillText(nameText, RX, cY + 68);
+    ctx.fillText(nameText, RX, ry + 42);
     ctx.restore();
+    ry += 50 + 14;
 
     // -- RANK PILL (top right of card) --
     const rkLabel = rank.toUpperCase();
@@ -229,8 +245,7 @@ module.exports = async (req, res) => {
     ctx.textAlign="center"; ctx.fillText(rkLabel, rkX+rkW/2, rkY+20); ctx.textAlign="left";
 
     // -- STAT CARDS --
-    // 3 cards: Coins, Limit, Level — fill full width, tall enough to feel big
-    const ST_Y = cY + 84;
+    const ST_Y = ry;
     const ST_H = 90;
     const ST_GAP = 12;
     const ST_W = Math.floor((RW - ST_GAP * 2) / 3);
@@ -270,6 +285,7 @@ module.exports = async (req, res) => {
 
     // -- EXP BAR --
     const EXP_Y = ST_Y + ST_H + 18;
+    ry = EXP_Y; // keep ry in sync (unused below but safe)
     const BAR_H = 22;
     const BAR_W = RW;
 
