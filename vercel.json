@@ -1,6 +1,7 @@
 {
   "routes": [
-    { "src": "/api/canvas", "dest": "/api/canvas.js" }
+    { "src": "/api/canvas", "dest": "/api/canvas.js" },
+    { "src": "/api/levelup", "dest": "/api/levelup.js" }
   ],
   "functions": {
     "api/*.js": {
