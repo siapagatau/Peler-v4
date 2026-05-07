@@ -405,7 +405,7 @@ module.exports = async (req, res) => {
     ctx.fillStyle = WHITE;
     ctx.font = F(13);
     ctx.textAlign = "center";
-    ctx.fillText("K E E P  G R O W I N G", cX+cW/2, RIB_Y+23);
+    ctx.fillText("KEEP GROWING", cX+cW/2, RIB_Y+23);
     ctx.textAlign = "left";
 
     // corner accents (simple dots)
