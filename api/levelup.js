@@ -30,8 +30,15 @@ function rr(ctx, x, y, w, h, r, fill, stroke) {
   if (stroke) ctx.stroke();
 }
 
-function drawStar(ctx, cx, cy, outerR, innerR, points, color, alpha) {
-  alpha = alpha !== undefined ? alpha : 1;
+function drawDot(ctx, x, y, r, color, alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawStar(ctx, cx, cy, outerR, innerR, points, color, alpha = 1) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.fillStyle = color;
@@ -65,77 +72,76 @@ module.exports = async (req, res) => {
     const oldLvl = parseInt(oldLevel) || 1;
     const newLvl = parseInt(newLevel) || oldLvl + 1;
 
-    // ── CANVAS (compact horizontal) ───────────────────────────
-    const W = 560, H = 160;
+    // ── PALETTE (matches profile card) ───────────────────────
+    const GREEN_MAIN  = "#2e7d32";
+    const GREEN_LIGHT = "#81c784";
+    const GREEN_PALE  = "#c8e6c9";
+    const GREEN_DARK  = "#1b5e20";
+    const WHITE       = "#ffffff";
+    const TEXT_DARK   = "#1e2a1e";
+    const TEXT_GRAY   = "#4a5b4a";
+
+    // ── CANVAS ────────────────────────────────────────────────
+    const W = 620, H = 200;
     const canvas = createCanvas(W, H);
     const ctx    = canvas.getContext("2d");
 
-    // ── COLOURS ───────────────────────────────────────────────
-    const GOLD     = "#ffd54f";
-    const GREEN_HI = "#69f076";
-    const WHITE    = "#ffffff";
-
-    // ── BACKGROUND ────────────────────────────────────────────
+    // ── BACKGROUND: same soft green gradient as profile ──────
     const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0,   "#0d1f0d");
-    bg.addColorStop(0.5, "#162916");
-    bg.addColorStop(1,   "#0d1f0d");
+    bg.addColorStop(0, "#e8f5e9");
+    bg.addColorStop(1, "#f1f8e9");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    // center-right radial glow
-    const glow = ctx.createRadialGradient(W * 0.65, H * 0.5, 0, W * 0.65, H * 0.5, H * 0.9);
-    glow.addColorStop(0,   "rgba(46,125,50,0.3)");
-    glow.addColorStop(0.6, "rgba(46,125,50,0.06)");
-    glow.addColorStop(1,   "rgba(0,0,0,0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, W, H);
+    // subtle corner blobs (same as profile)
+    [[0, 0, 110], [W, 0, 90], [W, H, 110], [0, H, 90]].forEach(([bx, by, br]) => {
+      ctx.save();
+      const rg = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+      rg.addColorStop(0, "rgba(129,199,132,0.12)");
+      rg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
 
-    // ── CARD BORDER ───────────────────────────────────────────
+    // ── CARD (white, shadow, green border — same as profile) ─
+    const cX = 16, cY = 14, cW = W - 32, cH = H - 28;
+
     ctx.save();
-    const bdG = ctx.createLinearGradient(0, 0, W, H);
-    bdG.addColorStop(0,   "rgba(105,240,118,0.75)");
-    bdG.addColorStop(0.5, "rgba(255,213,79,0.55)");
-    bdG.addColorStop(1,   "rgba(105,240,118,0.75)");
-    ctx.strokeStyle = bdG;
-    ctx.lineWidth   = 1.8;
-    ctx.shadowColor = GREEN_HI;
-    ctx.shadowBlur  = 10;
-    rr(ctx, 1, 1, W - 2, H - 2, 18, false, true);
+    ctx.shadowColor   = "rgba(0,40,0,0.10)";
+    ctx.shadowBlur    = 20;
+    ctx.shadowOffsetY = 5;
+    ctx.fillStyle     = WHITE;
+    rr(ctx, cX, cY, cW, cH, 22, true, false);
     ctx.restore();
 
-    // ── AVATAR ────────────────────────────────────────────────
-    const AV_CX = 80, AV_CY = H / 2, AV_R = 56;
-
-    // soft glow behind avatar
-    const avGlow = ctx.createRadialGradient(AV_CX, AV_CY, 0, AV_CX, AV_CY, AV_R + 24);
-    avGlow.addColorStop(0,   "rgba(105,240,118,0.18)");
-    avGlow.addColorStop(0.7, "rgba(46,125,50,0.05)");
-    avGlow.addColorStop(1,   "rgba(0,0,0,0)");
-    ctx.fillStyle = avGlow;
-    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 24, 0, Math.PI * 2); ctx.fill();
-
-    // gold-green ring
     ctx.save();
-    const ringG = ctx.createLinearGradient(AV_CX - AV_R, AV_CY - AV_R, AV_CX + AV_R, AV_CY + AV_R);
-    ringG.addColorStop(0,   GOLD);
-    ringG.addColorStop(0.5, GREEN_HI);
-    ringG.addColorStop(1,   GOLD);
-    ctx.strokeStyle = ringG;
-    ctx.lineWidth   = 3;
-    ctx.shadowColor = GOLD;
-    ctx.shadowBlur  = 14;
-    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 4, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle  = GREEN_MAIN;
+    ctx.lineWidth    = 1.5;
+    ctx.globalAlpha  = 0.4;
+    rr(ctx, cX, cY, cW, cH, 22, false, true);
     ctx.restore();
 
-    // white inner ring
+    // ── AVATAR (same style as profile: gradient ring + white stroke) ─
+    const AV_CX = cX + 88, AV_CY = cY + cH / 2, AV_R = 58;
+
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.85)";
-    ctx.lineWidth   = 1.5;
-    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 0.5, 0, Math.PI * 2); ctx.stroke();
+    const ring = ctx.createLinearGradient(AV_CX - AV_R, AV_CY - AV_R, AV_CX + AV_R, AV_CY + AV_R);
+    ring.addColorStop(0, GREEN_PALE);
+    ring.addColorStop(1, GREEN_LIGHT);
+    ctx.strokeStyle = ring;
+    ctx.lineWidth   = 4;
+    ctx.shadowColor = "rgba(46,125,50,0.3)";
+    ctx.shadowBlur  = 12;
+    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 5, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
 
-    // avatar image
+    ctx.save();
+    ctx.strokeStyle = WHITE;
+    ctx.lineWidth   = 2.5;
+    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 1, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+
     let avImg;
     try   { avImg = await loadImage(avatar); }
     catch { avImg = await loadImage("https://cdn.discordapp.com/embed/avatars/0.png"); }
@@ -144,150 +150,170 @@ module.exports = async (req, res) => {
     ctx.drawImage(avImg, AV_CX - AV_R, AV_CY - AV_R, AV_R * 2, AV_R * 2);
     ctx.restore();
 
-    // sparkles around avatar
-    const sps = [
-      [AV_CX - AV_R - 10, AV_CY - 22, 7,  GOLD,     0.9],
-      [AV_CX + AV_R + 8,  AV_CY - 26, 6,  GREEN_HI, 0.8],
-      [AV_CX + AV_R + 6,  AV_CY + 24, 7,  GOLD,     0.7],
-      [AV_CX - AV_R - 8,  AV_CY + 26, 5,  GREEN_HI, 0.75],
-      [AV_CX,             AV_CY - AV_R - 12, 5, GOLD, 0.85],
-    ];
-    sps.forEach(function(s) { drawStar(ctx, s[0], s[1], s[2], s[2] * 0.38, 4, s[3], s[4]); });
+    // same green dot sparkles as profile
+    const sp = [[AV_CX - AV_R - 12, AV_CY - 20, 4], [AV_CX + AV_R + 10, AV_CY - 24, 3.5],
+                [AV_CX + AV_R + 8, AV_CY + 22, 4],   [AV_CX - AV_R - 10, AV_CY + 26, 3],
+                [AV_CX, AV_CY - AV_R - 14, 3.5]];
+    sp.forEach(([x, y, r]) => drawDot(ctx, x, y, r, GREEN_LIGHT, 0.9));
 
-    // ── DIVIDER ───────────────────────────────────────────────
-    const DIV_X = 153;
+    // ── VERTICAL DIVIDER (same as profile card style) ─────────
+    const DIV_X = cX + 164;
     ctx.save();
-    const dvG = ctx.createLinearGradient(DIV_X, 18, DIV_X, H - 18);
-    dvG.addColorStop(0,   "rgba(105,240,118,0)");
-    dvG.addColorStop(0.3, "rgba(105,240,118,0.45)");
-    dvG.addColorStop(0.7, "rgba(255,213,79,0.35)");
-    dvG.addColorStop(1,   "rgba(105,240,118,0)");
+    const dvG = ctx.createLinearGradient(DIV_X, cY + 14, DIV_X, cY + cH - 14);
+    dvG.addColorStop(0,   "rgba(46,125,50,0)");
+    dvG.addColorStop(0.3, "rgba(46,125,50,0.3)");
+    dvG.addColorStop(0.7, "rgba(46,125,50,0.25)");
+    dvG.addColorStop(1,   "rgba(46,125,50,0)");
     ctx.strokeStyle = dvG;
     ctx.lineWidth   = 1;
-    ctx.beginPath(); ctx.moveTo(DIV_X, 18); ctx.lineTo(DIV_X, H - 18); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(DIV_X, cY + 14); ctx.lineTo(DIV_X, cY + cH - 14); ctx.stroke();
     ctx.restore();
 
-    // ── RIGHT: TEXT ───────────────────────────────────────────
-    const TX = DIV_X + 22;
-    const CY = H / 2;
+    // ── RIGHT CONTENT ─────────────────────────────────────────
+    const TX  = DIV_X + 22;
+    const CY  = cY + cH / 2;
 
-    // "LEVEL UP" label (small caps spaced)
+    // ── TITLE: "LEVEL UP!" — big, bold, green ─────────────────
+    const titleTxt = "LEVEL UP!";
     ctx.save();
-    ctx.font      = F(12, false);
-    ctx.fillStyle = "rgba(165,214,167,0.7)";
-    ctx.fillText("L E V E L   U P", TX, CY - 42);
+    ctx.font = F(38);
+    ctx.shadowColor = "rgba(46,125,50,0.18)";
+    ctx.shadowBlur  = 8;
+    const titleGrad = ctx.createLinearGradient(TX, CY - 50, TX + 220, CY - 10);
+    titleGrad.addColorStop(0, GREEN_MAIN);
+    titleGrad.addColorStop(0.6, GREEN_LIGHT);
+    titleGrad.addColorStop(1, GREEN_DARK);
+    ctx.fillStyle = titleGrad;
+    ctx.fillText(titleTxt, TX, CY - 18);
     ctx.restore();
 
-    // thin separator
+    // thin separator below title (same pattern as profile's EXP separator line)
     ctx.save();
-    ctx.strokeStyle = "rgba(105,240,118,0.18)";
+    ctx.strokeStyle = "rgba(46,125,50,0.15)";
     ctx.lineWidth   = 1;
-    ctx.beginPath(); ctx.moveTo(TX, CY - 32); ctx.lineTo(TX + 230, CY - 32); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(TX, CY - 8); ctx.lineTo(TX + 330, CY - 8); ctx.stroke();
     ctx.restore();
 
-    // name
-    const nameText = name.length > 16 ? name.slice(0, 14) + "\u2026" : name;
+    // ── NAME ──────────────────────────────────────────────────
+    const nameText = name.length > 18 ? name.slice(0, 16) + "\u2026" : name;
     ctx.save();
-    ctx.font        = F(20);
-    ctx.fillStyle   = WHITE;
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur  = 6;
-    ctx.fillText(nameText, TX, CY - 10);
+    ctx.font      = F(15, false);
+    ctx.fillStyle = TEXT_GRAY;
+    ctx.fillText(nameText, TX, CY + 10);
     ctx.restore();
 
     // ── LEVEL TRANSITION: Lv.X → Lv.Y ────────────────────────
-    const LV_Y = CY + 34;   // text baseline
+    const LV_Y = CY + 50;
 
-    ctx.font = F(36);
+    ctx.font = F(34);
     const oldStr = String(oldLvl);
     const newStr = String(newLvl);
     const oldW   = ctx.measureText(oldStr).width;
     const newW   = ctx.measureText(newStr).width;
 
-    ctx.font = F(14, false);
+    ctx.font = F(13, false);
     const prefW = ctx.measureText("Lv.").width;
+    const ARR_W = 20, GAP = 8;
 
-    const ARR_W = 22, GAP = 10;
     let px = TX;
 
-    // "Lv." old
+    // "Lv." old label (muted)
     ctx.save();
-    ctx.font      = F(14, false);
-    ctx.fillStyle = "rgba(165,214,167,0.5)";
+    ctx.font      = F(13, false);
+    ctx.fillStyle = "rgba(74,91,74,0.5)";
     ctx.fillText("Lv.", px, LV_Y);
     ctx.restore();
-    px += prefW + 3;
+    px += prefW + 2;
 
-    // old number (dim)
+    // old number (muted gray-green)
     ctx.save();
-    ctx.font      = F(36);
-    ctx.fillStyle = "rgba(200,230,201,0.45)";
+    ctx.font      = F(34);
+    ctx.fillStyle = "rgba(100,140,100,0.4)";
     ctx.fillText(oldStr, px, LV_Y);
     ctx.restore();
     px += oldW + GAP;
 
-    // arrow
-    const arrCY = LV_Y - 15;
+    // arrow (solid green, same feel as profile's green elements)
+    const arrCY = LV_Y - 13;
     ctx.save();
-    ctx.fillStyle   = GOLD;
-    ctx.shadowColor = GOLD;
-    ctx.shadowBlur  = 14;
-    const aw = ARR_W, ah = 9;
+    ctx.fillStyle   = GREEN_MAIN;
+    ctx.shadowColor = "rgba(46,125,50,0.4)";
+    ctx.shadowBlur  = 10;
+    const aw = ARR_W, ah = 8;
     ctx.beginPath();
     ctx.moveTo(px,          arrCY - ah / 2);
-    ctx.lineTo(px + aw - 7, arrCY - ah / 2);
-    ctx.lineTo(px + aw - 7, arrCY - ah);
+    ctx.lineTo(px + aw - 6, arrCY - ah / 2);
+    ctx.lineTo(px + aw - 6, arrCY - ah);
     ctx.lineTo(px + aw,     arrCY);
-    ctx.lineTo(px + aw - 7, arrCY + ah);
-    ctx.lineTo(px + aw - 7, arrCY + ah / 2);
+    ctx.lineTo(px + aw - 6, arrCY + ah);
+    ctx.lineTo(px + aw - 6, arrCY + ah / 2);
     ctx.lineTo(px,          arrCY + ah / 2);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
     px += aw + GAP;
 
-    // "Lv." new
+    // "Lv." new label (green)
     ctx.save();
-    ctx.font        = F(14, false);
-    ctx.fillStyle   = GREEN_HI;
-    ctx.shadowColor = GREEN_HI;
-    ctx.shadowBlur  = 8;
+    ctx.font        = F(13, false);
+    ctx.fillStyle   = GREEN_MAIN;
+    ctx.shadowColor = "rgba(46,125,50,0.3)";
+    ctx.shadowBlur  = 6;
     ctx.fillText("Lv.", px, LV_Y);
     ctx.restore();
-    px += prefW + 3;
+    px += prefW + 2;
 
-    // new number (bright gradient glow)
+    // new number (gradient, same as profile's gradient text highlight)
     ctx.save();
-    ctx.font        = F(36);
-    ctx.shadowColor = GREEN_HI;
-    ctx.shadowBlur  = 24;
-    const lvGrad = ctx.createLinearGradient(px, LV_Y - 36, px + newW, LV_Y);
-    lvGrad.addColorStop(0,   WHITE);
-    lvGrad.addColorStop(0.45, GREEN_HI);
-    lvGrad.addColorStop(1,   GOLD);
+    ctx.font        = F(34);
+    ctx.shadowColor = "rgba(46,125,50,0.25)";
+    ctx.shadowBlur  = 14;
+    const lvGrad = ctx.createLinearGradient(px, LV_Y - 34, px + newW, LV_Y);
+    lvGrad.addColorStop(0,   GREEN_DARK);
+    lvGrad.addColorStop(0.5, GREEN_MAIN);
+    lvGrad.addColorStop(1,   GREEN_LIGHT);
     ctx.fillStyle = lvGrad;
     ctx.fillText(newStr, px, LV_Y);
     ctx.restore();
 
-    // ── BOTTOM ACCENT LINE ────────────────────────────────────
-    const lineY = H - 11;
-    ctx.save();
-    const lineG = ctx.createLinearGradient(24, lineY, W - 24, lineY);
-    lineG.addColorStop(0,   "rgba(105,240,118,0)");
-    lineG.addColorStop(0.3, "rgba(105,240,118,0.5)");
-    lineG.addColorStop(0.5, "rgba(255,213,79,0.75)");
-    lineG.addColorStop(0.7, "rgba(105,240,118,0.5)");
-    lineG.addColorStop(1,   "rgba(105,240,118,0)");
-    ctx.strokeStyle = lineG;
-    ctx.lineWidth   = 1;
-    ctx.shadowColor = GOLD;
-    ctx.shadowBlur  = 6;
-    ctx.beginPath(); ctx.moveTo(24, lineY); ctx.lineTo(W - 24, lineY); ctx.stroke();
-    ctx.restore();
+    // ── BOTTOM RIBBON (same as profile card) ─────────────────
+    const RIB_H = 30;
+    const RIB_Y = cY + cH - RIB_H;
+    const ribG  = ctx.createLinearGradient(cX, RIB_Y, cX + cW, RIB_Y);
+    ribG.addColorStop(0, GREEN_MAIN);
+    ribG.addColorStop(1, GREEN_LIGHT);
+    ctx.fillStyle = ribG;
+    ctx.beginPath();
+    ctx.moveTo(cX, RIB_Y);
+    ctx.lineTo(cX + cW, RIB_Y);
+    ctx.lineTo(cX + cW, cY + cH - 22);
+    ctx.quadraticCurveTo(cX + cW, cY + cH, cX + cW - 22, cY + cH);
+    ctx.lineTo(cX + 22, cY + cH);
+    ctx.quadraticCurveTo(cX, cY + cH, cX, cY + cH - 22);
+    ctx.lineTo(cX, RIB_Y);
+    ctx.closePath();
+    ctx.fill();
 
-    drawStar(ctx, W / 2,      lineY, 4,   1.6, 4, GOLD,     0.9);
-    drawStar(ctx, W / 2 - 55, lineY, 2.5, 1,   4, GREEN_HI, 0.6);
-    drawStar(ctx, W / 2 + 55, lineY, 2.5, 1,   4, GREEN_HI, 0.6);
+    // same dot pattern as profile ribbon
+    for (let i = 0; i < 11; i++) {
+      ctx.fillStyle = "rgba(255,255,255,0.5)";
+      ctx.beginPath();
+      ctx.arc(cX + 36 + i * (cW - 72) / 10, RIB_Y + RIB_H / 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = WHITE;
+    ctx.font      = F(12);
+    ctx.textAlign = "center";
+    ctx.fillText("KEEP GROWING", cX + cW / 2, RIB_Y + 20);
+    ctx.textAlign = "left";
+
+    // corner accent dots (same as profile)
+    ctx.fillStyle = GREEN_LIGHT;
+    [[cX + 14, cY + 14], [cX + cW - 14, cY + 14],
+     [cX + 14, cY + cH - 14], [cX + cW - 14, cY + cH - 14]].forEach(([x, y]) => {
+      ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
+    });
 
     res.setHeader("Content-Type", "image/png");
     res.send(canvas.toBuffer("image/png"));
