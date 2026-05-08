@@ -82,7 +82,7 @@ module.exports = async (req, res) => {
     const TEXT_GRAY   = "#4a5b4a";
 
     // ── CANVAS ────────────────────────────────────────────────
-    const W = 620, H = 200;
+    const W = 620, H = 220;
     const canvas = createCanvas(W, H);
     const ctx    = canvas.getContext("2d");
 
@@ -187,23 +187,15 @@ module.exports = async (req, res) => {
     ctx.fillText(titleTxt, TX, CY - 18);
     ctx.restore();
 
-    // thin separator below title (same pattern as profile's EXP separator line)
+    // thin separator below title
     ctx.save();
     ctx.strokeStyle = "rgba(46,125,50,0.15)";
     ctx.lineWidth   = 1;
     ctx.beginPath(); ctx.moveTo(TX, CY - 8); ctx.lineTo(TX + 330, CY - 8); ctx.stroke();
     ctx.restore();
 
-    // ── NAME ──────────────────────────────────────────────────
-    const nameText = name.length > 18 ? name.slice(0, 16) + "\u2026" : name;
-    ctx.save();
-    ctx.font      = F(15, false);
-    ctx.fillStyle = TEXT_GRAY;
-    ctx.fillText(nameText, TX, CY + 10);
-    ctx.restore();
-
     // ── LEVEL TRANSITION: Lv.X → Lv.Y ────────────────────────
-    const LV_Y = CY + 50;
+    const LV_Y = CY + 44;
 
     ctx.font = F(34);
     const oldStr = String(oldLvl);
