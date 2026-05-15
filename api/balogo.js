@@ -2,66 +2,61 @@ const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 const fs   = require("fs");
 const path = require("path");
 
-// ── PATH ASET ────────────────────────────────────────────────
-const ASSET_DIR = path.resolve(__dirname, "../assetba");
-const p = (f) => path.join(ASSET_DIR, f);
-
 // ── FONT SETUP ───────────────────────────────────────────────
-const FONT_STACK = "BlueArchive, GlowSans, sans-serif";
+const FONT_STACK = "BlueArchive, InterBold, sans-serif";
 
 try {
-  const fontCandidates = [
-    [p("RoGSanSrfStd-Bd.otf"),         "BlueArchive"],
-    [p("GlowSansSC-Normal-Heavy.otf"), "BlueArchive"],
-    [p("GlowSansSC-Normal-Heavy.otf"), "GlowSans"],
+  const candidates = [
+    ["fonts/RoGSanSrfStd-Bd.otf",             "BlueArchive"],
+    ["fonts/GlowSansSC-Normal-Heavy_diff.otf", "BlueArchive"],
+    ["fonts/Inter-Bold.ttf",                    "InterBold"],
   ];
-  for (const [full, alias] of fontCandidates) {
+  for (const [rel, alias] of candidates) {
+    const full = path.join(process.cwd(), rel);
     if (fs.existsSync(full)) {
       GlobalFonts.register(fs.readFileSync(full), alias);
-      console.log(`[logo] Font loaded: ${path.basename(full)} as "${alias}"`);
     }
   }
 } catch (e) {
   console.warn("[logo] Font load warning:", e.message);
 }
 
-// ── PRE-LOAD ASET GAMBAR ─────────────────────────────────────
-let _haloImg  = null;
-let _crossImg = null;
+// ── SETTINGS ─────────────────────────────────────────────────
+const SETTINGS = {
+  canvasHeight:    200,
+  canvasWidth:     800,
+  fontSize:        130,
+  horizontalTilt:  -0.15,
+  textBaseLine:    0.78,
+  paddingX:        40,
+  graphOffset:     { X: 0, Y: 0 },
 
-async function preloadAssets() {
-  for (const [file, varName] of [["halo.png","_haloImg"],["cross.png","_crossImg"]]) {
-    const full = p(file);
-    if (fs.existsSync(full)) {
-      try {
-        if (varName === "_haloImg")  _haloImg  = await loadImage(full);
-        if (varName === "_crossImg") _crossImg = await loadImage(full);
-        console.log(`[logo] ${file} loaded`);
-      } catch (e) { console.warn(`[logo] Failed to load ${file}:`, e.message); }
-    } else { console.warn(`[logo] ${file} not found at:`, full); }
-  }
-}
-preloadAssets();
+  hollowPath: [
+    [214, 0],
+    [500, 0],
+    [286, 500],
+    [0,   500],
+  ],
+};
 
-// ── HELPERS ──────────────────────────────────────────────────
+// ── HELPERS ───────────────────────────────────────────────────
 function effectiveWidthL(metrics, tilt, canvasH, baseLine) {
-  return metrics.width - (baseLine * canvasH + metrics.fontBoundingBoxDescent) * tilt;
+  return (
+    metrics.width -
+    (baseLine * canvasH + metrics.fontBoundingBoxDescent) * tilt
+  );
 }
 function effectiveWidthR(metrics, tilt, canvasH, baseLine) {
-  return metrics.width + (baseLine * canvasH - metrics.fontBoundingBoxAscent) * tilt;
+  return (
+    metrics.width +
+    (baseLine * canvasH - metrics.fontBoundingBoxAscent) * tilt
+  );
+}
+function applyShear(ctx, tilt) {
+  ctx.setTransform(1, 0, tilt, 1, 0, 0);
 }
 
-// ── MAIN HANDLER ─────────────────────────────────────────────
-/**
- * Query params:
- *   textL     - teks kiri (biru)    — default "Blue"
- *   textR     - teks kanan (hitam)  — default "Archive"
- *   colorL    - warna teks kiri     — default "#128AFA"
- *   colorR    - warna teks kanan    — default "#2B2B2B"
- *   bg        - warna bg atau "transparent" — default "#ffffff"
- *   fontSize  - ukuran font px      — default 120
- *   tilt      - italic shear        — default -0.15
- */
+// ── MAIN HANDLER ──────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -69,142 +64,153 @@ module.exports = async (req, res) => {
 
   try {
     let {
-      textL    = "Blue",
-      textR    = "Archive",
-      colorL   = "#128AFA",
-      colorR   = "#2B2B2B",
-      bg       = "#ffffff",
-      fontSize = "120",
-      tilt     = "-0.15",
+      textL      = "Blue",
+      textR      = "Archive",
+      colorL     = "#128AFA",
+      colorR     = "#2B2B2B",
+      bg         = "#ffffff",
+      fontSize   = String(SETTINGS.fontSize),
+      tilt       = String(SETTINGS.horizontalTilt),
+      halo       = "",
+      cross      = "",
+      haloScale  = "1.5",    // baru: perbesar halo
+      crossScale = "1.5",    // baru: perbesar cross
     } = req.query;
 
-    const fSize = Math.max(20, Math.min(300, parseInt(fontSize)  || 120));
-    const shear = Math.max(-0.5, Math.min(0.5, parseFloat(tilt) || -0.15));
+    const fSize = Math.max(20, Math.min(300, parseInt(fontSize) || SETTINGS.fontSize));
+    const shear = Math.max(-0.5, Math.min(0.5, parseFloat(tilt) || SETTINGS.horizontalTilt));
+    const hScale = Math.max(0.5, Math.min(3, parseFloat(haloScale) || 1.5));
+    const cScale = Math.max(0.5, Math.min(3, parseFloat(crossScale) || 1.5));
+    const CH    = SETTINGS.canvasHeight;
+    const pad   = SETTINGS.paddingX;
+    const bLine = SETTINGS.textBaseLine;
+    const font  = `bold ${fSize}px ${FONT_STACK}`;
 
-    const safeColor = (c, fb) => /^#[0-9A-Fa-f]{3,8}$/.test(c) ? c : fb;
+    const safeColor = (c, fallback) =>
+      /^#[0-9A-Fa-f]{3,8}$/.test(c) ? c : fallback;
     colorL = safeColor(colorL, "#128AFA");
     colorR = safeColor(colorR, "#2B2B2B");
 
     const transparent = bg === "transparent" || bg === "none";
     if (!transparent) bg = safeColor(bg, "#ffffff");
 
-    // ── Layout ───────────────────────────────────────────────
-    // canvasHeight = tinggi area TEKS saja
-    // totalHeight  = lebih tinggi untuk memberi ruang halo/cross di atas
-    const textH   = Math.round(fSize * 1.35);  // cukup untuk 1 baris teks
-    const totalH  = Math.round(fSize * 2.2);   // ruang ekstra ke atas untuk halo
-    const textY   = totalH - Math.round(fSize * 0.28); // baseline teks
-    const padX    = Math.round(fSize * 0.35);
-
-    const font    = `bold ${fSize}px ${FONT_STACK}`;
-
-    // Ukur teks
-    const mc = createCanvas(10, 10).getContext("2d");
+    // ── Ukur teks ─────────────────────────────────────────────
+    const measure = createCanvas(10, 10);
+    const mc = measure.getContext("2d");
     mc.font = font;
     const mL = mc.measureText(textL);
     const mR = mc.measureText(textR);
 
-    // Lebar efektif setelah shear
-    // (shear negatif → huruf condong ke kanan-atas → teks kiri lebih sempit di kiri)
-    const twL = mL.width - (textY + (mL.fontBoundingBoxDescent || fSize*0.15)) * shear;
-    const twR = mR.width + (textY - (mR.fontBoundingBoxAscent  || fSize*1.0))  * shear;
-
-    const halfL = twL + padX;
-    const halfR = twR + padX;
+    const twL = effectiveWidthL(mL, shear, CH, bLine);
+    const twR = effectiveWidthR(mR, shear, CH, bLine);
+    const halfL = Math.max(twL + pad, SETTINGS.canvasWidth / 2);
+    const halfR = Math.max(twR + pad, SETTINGS.canvasWidth / 2);
     const CW    = halfL + halfR;
 
-    // ── Canvas ───────────────────────────────────────────────
-    const canvas = createCanvas(CW, totalH);
+    // ── Canvas utama ──────────────────────────────────────────
+    const canvas = createCanvas(CW, CH);
     const ctx    = canvas.getContext("2d");
 
     if (!transparent) {
       ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, CW, totalH);
+      ctx.fillRect(0, 0, CW, CH);
     }
 
-    // ── Posisi halo & cross ───────────────────────────────────
-    // Halo/cross duduk di tengah (halfL), mulai dari Y=0
-    // Ukuran = totalH supaya bisa keluar ke atas teks
-    const assetSize = totalH;
-    const assetX    = halfL - assetSize / 2;
-    const assetY    = 0;
+    // ── Load gambar ───────────────────────────────────────────
+    let haloImg  = null;
+    let crossImg = null;
+    if (halo)  { try { haloImg  = await loadImage(halo);  } catch (_) {} }
+    if (cross) { try { crossImg = await loadImage(cross); } catch (_) {} }
 
-    // Layer 1: halo (di belakang teks)
-    if (_haloImg) {
-      ctx.drawImage(_haloImg, assetX, assetY, assetSize, assetSize);
+    // ── Gambar HALO (di belakang teks) dengan skala ───────────
+    if (haloImg) {
+      const iconCenterX = halfL - CH/2 + SETTINGS.graphOffset.X;
+      const iconCenterY = SETTINGS.graphOffset.Y;
+      const newW = CH * hScale;
+      const newH = CH * hScale;
+      const drawX = iconCenterX - newW/2;
+      const drawY = iconCenterY - newH/2;
+      ctx.drawImage(haloImg, drawX, drawY, newW, newH);
     }
 
-    // Layer 2: teks kiri — biru, italic kanan
+    // ── Teks kiri (biru) ──────────────────────────────────────
     ctx.save();
     ctx.font      = font;
     ctx.fillStyle = colorL;
     ctx.textAlign = "end";
-    ctx.setTransform(1, 0, shear, 1, 0, 0);
-    ctx.fillText(textL, halfL, textY);
+    applyShear(ctx, shear);
+    ctx.fillText(textL, halfL, CH * bLine);
     ctx.resetTransform();
     ctx.restore();
 
-    // Layer 3: teks kanan — stroke putih dulu (biar terbaca di atas halo) lalu fill
+    // ── Teks kanan (hitam + stroke putih) ─────────────────────
     ctx.save();
-    ctx.font        = font;
-    ctx.textAlign   = "start";
+    ctx.font      = font;
+    ctx.textAlign = "start";
     ctx.strokeStyle = "white";
     ctx.lineWidth   = Math.max(4, fSize * 0.09);
     ctx.lineJoin    = "round";
-    ctx.setTransform(1, 0, shear, 1, 0, 0);
+    applyShear(ctx, shear);
 
     if (transparent) {
       ctx.globalCompositeOperation = "destination-out";
-      ctx.strokeText(textR, halfL, textY);
+      ctx.strokeText(textR, halfL, CH * bLine);
       ctx.globalCompositeOperation = "source-over";
     } else {
-      ctx.strokeText(textR, halfL, textY);
+      ctx.strokeText(textR, halfL, CH * bLine);
     }
 
     ctx.fillStyle = colorR;
-    ctx.fillText(textR, halfL, textY);
+    ctx.fillText(textR, halfL, CH * bLine);
     ctx.resetTransform();
     ctx.restore();
 
-    // Layer 4: hollow path
-    // Memotong area kecil HANYA di sekitar garis tengah (halfL),
-    // membentuk parallelogram tipis vertikal mirip separator diagonal.
-    // Koordinat absolut (bukan rescale dari 500×500).
-    //
-    // Di referensi asli (settings.ts), hollowPath ini memotong
-    // bagian yang tertutupi gambar "cross" — supaya cross kelihatan
-    // tembus ke background. Karena cross sudah punya alpha sendiri,
-    // kita skip hollowPath agar tidak merusak teks.
-    // (hollowPath hanya diperlukan bila bg transparan + tidak ada alpha di cross)
-    if (transparent && !_crossImg) {
-      // Parallelogram tipis di garis tengah
-      const slantOffset = totalH * Math.abs(shear);
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(halfL - slantOffset - 2,  0);
-      ctx.lineTo(halfL + slantOffset + 2,  0);
-      ctx.lineTo(halfL + slantOffset + 2,  totalH);
-      ctx.lineTo(halfL - slantOffset - 2,  totalH);
-      ctx.closePath();
+    // ── Hollow path (potong sudut) ────────────────────────────
+    const scale = CH / 500;
+    const gx    = halfL - CH / 2 + SETTINGS.graphOffset.X;
+    const gy    = SETTINGS.graphOffset.Y;
+    const hp    = SETTINGS.hollowPath;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(gx + hp[0][0] * scale, gy + hp[0][1] * scale);
+    for (let i = 1; i < hp.length; i++) {
+      ctx.lineTo(gx + hp[i][0] * scale, gy + hp[i][1] * scale);
+    }
+    ctx.closePath();
+
+    if (transparent) {
       ctx.globalCompositeOperation = "destination-out";
       ctx.fillStyle = "white";
-      ctx.fill();
+    } else {
+      ctx.fillStyle = bg;
+    }
+    ctx.fill();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.restore();
+
+    // ── Gambar CROSS (melubangi semua lapisan di bawahnya) ────
+    if (crossImg) {
+      ctx.save();
+      // Mode destination-out → menghapus pixel (membuat transparan)
+      ctx.globalCompositeOperation = "destination-out";
+      const iconCenterX = halfL - CH/2 + SETTINGS.graphOffset.X;
+      const iconCenterY = SETTINGS.graphOffset.Y;
+      const newW = CH * cScale;
+      const newH = CH * cScale;
+      const drawX = iconCenterX - newW/2;
+      const drawY = iconCenterY - newH/2;
+      ctx.drawImage(crossImg, drawX, drawY, newW, newH);
       ctx.globalCompositeOperation = "source-over";
       ctx.restore();
     }
 
-    // Layer 5: cross (di atas semua)
-    if (_crossImg) {
-      ctx.drawImage(_crossImg, assetX, assetY, assetSize, assetSize);
-    }
-
-    // ── Crop ke area teks aktif ───────────────────────────────
-    const cropX = halfL - twL - padX;
-    const cropW = twL + twR + padX * 2;
-
-    const output = createCanvas(cropW, totalH);
+    // ── Crop ke area teks ─────────────────────────────────────
+    const cropX = halfL - twL - pad;
+    const cropW = twL + twR + pad * 2;
+    const output = createCanvas(cropW, CH);
     const oc     = output.getContext("2d");
-    oc.drawImage(canvas, cropX, 0, cropW, totalH, 0, 0, cropW, totalH);
+    oc.drawImage(canvas, cropX, 0, cropW, CH, 0, 0, cropW, CH);
 
     res.setHeader("Content-Type", "image/png");
     res.send(output.toBuffer("image/png"));
