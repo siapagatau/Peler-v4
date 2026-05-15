@@ -11,6 +11,7 @@ const SETTINGS = {
   textBaseLine: 0.58,
   graphOffset: { X: 0, Y: 0 },
   paddingX: 20,
+  // hollowPath dihapus karena sudah tidak dipakai
 };
 
 // ========== PATH ASET ==========
@@ -93,8 +94,8 @@ module.exports = async (req, res) => {
     const bgColor = isTransparent ? null : safeColor(bg, "#ffffff");
 
     const canvasHeight = SETTINGS.canvasHeight;
-    const baseCanvasWidth = SETTINGS.canvasWidth;
-    const baselineY = canvasHeight * SETTINGS.textBaseLine;
+    const baseCanvasWidth = SETTINGS.canvasWidth; // 1000
+    const baselineY = canvasHeight * SETTINGS.textBaseLine; // 500 * 0.58 = 290
     const padding = SETTINGS.paddingX;
 
     const fontDef = `bold ${fSize}px ${FONT_STACK}`;
@@ -106,26 +107,29 @@ module.exports = async (req, res) => {
     const metricsL = mockCtx.measureText(textL);
     const metricsR = mockCtx.measureText(textR);
 
+    // Hitung textWidthL dan textWidthR persis seperti setWidth()
     const descent = metricsL.fontBoundingBoxDescent || fSize * 0.15;
     const ascent = metricsR.fontBoundingBoxAscent || fSize * 0.9;
     const textWidthL = metricsL.width - (baselineY + descent) * shear;
     const textWidthR = metricsR.width + (baselineY - ascent) * shear;
 
+    // Tentukan lebar canvas kiri/kanan (minimal setengah dari baseCanvasWidth)
     let canvasWidthL = Math.max(baseCanvasWidth / 2, textWidthL + padding);
     let canvasWidthR = Math.max(baseCanvasWidth / 2, textWidthR + padding);
     const totalWidth = canvasWidthL + canvasWidthR;
-    const centerX = canvasWidthL;
+    const centerX = canvasWidthL; // posisi tengah (batas antara teks kiri & kanan)
 
+    // Buat canvas utama
     const canvas = createCanvas(totalWidth, canvasHeight);
     const ctx = canvas.getContext("2d");
 
-    // Background
+    // 1. Background
     if (!isTransparent) {
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, totalWidth, canvasHeight);
     }
 
-    // Teks kiri (biru)
+    // 2. Teks kiri (biru) dengan shear
     ctx.save();
     ctx.font = fontDef;
     ctx.fillStyle = colorL;
@@ -135,7 +139,7 @@ module.exports = async (req, res) => {
     ctx.resetTransform();
     ctx.restore();
 
-    // Halo
+    // 3. Halo
     if (_haloImg) {
       const haloSize = canvasHeight;
       const haloX = centerX - haloSize / 2 + offsetX;
@@ -143,7 +147,7 @@ module.exports = async (req, res) => {
       ctx.drawImage(_haloImg, haloX, haloY, haloSize, haloSize);
     }
 
-    // Teks kanan (hitam) + stroke putih
+    // 4. Teks kanan (hitam) dengan stroke putih, lalu fill
     ctx.save();
     ctx.font = fontDef;
     ctx.textAlign = "start";
@@ -165,37 +169,23 @@ module.exports = async (req, res) => {
     ctx.resetTransform();
     ctx.restore();
 
-    // ========== HOLLOW PATH: PARALLELOGRAM TIPIS VERTIKAL (efek lancip) ==========
-    const slantWidth = Math.abs(shear) * canvasHeight * 0.8; // lebar potongan
-    const halfSlant = slantWidth / 2;
-    // Offset horizontal karena shear membuat parallelogram miring
-    const shearOffset = shear * canvasHeight;
-    
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(centerX - halfSlant, 0);
-    ctx.lineTo(centerX + halfSlant, 0);
-    ctx.lineTo(centerX + halfSlant + shearOffset, canvasHeight);
-    ctx.lineTo(centerX - halfSlant + shearOffset, canvasHeight);
-    ctx.closePath();
-    
-    if (isTransparent) {
-      ctx.globalCompositeOperation = "destination-out";
-    }
-    ctx.fillStyle = "white";
-    ctx.fill();
-    ctx.globalCompositeOperation = "source-over";
-    ctx.restore();
-
-    // Cross (di atas semua)
+    // 5. Cross dengan efek memotong teks (stroke transparan / cut-out)
     if (_crossImg) {
       const crossSize = canvasHeight;
       const crossX = centerX - crossSize / 2 + offsetX;
       const crossY = offsetY;
+
+      // Pertama, gambar cross dengan mode "destination-out" untuk menghapus teks (dan apapun) di area cross
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-out";
       ctx.drawImage(_crossImg, crossX, crossY, crossSize, crossSize);
+      // Kedua, gambar cross lagi dengan mode normal agar cross terlihat
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(_crossImg, crossX, crossY, crossSize, crossSize);
+      ctx.restore();
     }
 
-    // Crop seperti generateImg()
+    // 6. Crop seperti generateImg()
     let outputCanvas;
     if (textWidthL + padding < baseCanvasWidth / 2 || textWidthR + padding < baseCanvasWidth / 2) {
       const cropWidth = textWidthL + textWidthR + padding * 2;
