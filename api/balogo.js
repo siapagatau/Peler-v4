@@ -11,12 +11,6 @@ const SETTINGS = {
   textBaseLine: 0.58,
   graphOffset: { X: 0, Y: 0 },
   paddingX: 20,
-  hollowPath: [
-    [240, 240],
-    [260, 240],
-    [260, 260],
-    [240, 260]
-  ]
 };
 
 // ========== PATH ASET ==========
@@ -99,8 +93,8 @@ module.exports = async (req, res) => {
     const bgColor = isTransparent ? null : safeColor(bg, "#ffffff");
 
     const canvasHeight = SETTINGS.canvasHeight;
-    const baseCanvasWidth = SETTINGS.canvasWidth; // 1000
-    const baselineY = canvasHeight * SETTINGS.textBaseLine; // 500 * 0.58 = 290
+    const baseCanvasWidth = SETTINGS.canvasWidth;
+    const baselineY = canvasHeight * SETTINGS.textBaseLine;
     const padding = SETTINGS.paddingX;
 
     const fontDef = `bold ${fSize}px ${FONT_STACK}`;
@@ -112,29 +106,26 @@ module.exports = async (req, res) => {
     const metricsL = mockCtx.measureText(textL);
     const metricsR = mockCtx.measureText(textR);
 
-    // Hitung textWidthL dan textWidthR persis seperti setWidth()
     const descent = metricsL.fontBoundingBoxDescent || fSize * 0.15;
     const ascent = metricsR.fontBoundingBoxAscent || fSize * 0.9;
     const textWidthL = metricsL.width - (baselineY + descent) * shear;
     const textWidthR = metricsR.width + (baselineY - ascent) * shear;
 
-    // Tentukan lebar canvas kiri/kanan (minimal setengah dari baseCanvasWidth)
     let canvasWidthL = Math.max(baseCanvasWidth / 2, textWidthL + padding);
     let canvasWidthR = Math.max(baseCanvasWidth / 2, textWidthR + padding);
     const totalWidth = canvasWidthL + canvasWidthR;
-    const centerX = canvasWidthL; // posisi tengah (batas antara teks kiri & kanan)
+    const centerX = canvasWidthL;
 
-    // Buat canvas utama
     const canvas = createCanvas(totalWidth, canvasHeight);
     const ctx = canvas.getContext("2d");
 
-    // 1. Background
+    // Background
     if (!isTransparent) {
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, totalWidth, canvasHeight);
     }
 
-    // 2. Teks kiri (biru) dengan shear
+    // Teks kiri (biru)
     ctx.save();
     ctx.font = fontDef;
     ctx.fillStyle = colorL;
@@ -144,7 +135,7 @@ module.exports = async (req, res) => {
     ctx.resetTransform();
     ctx.restore();
 
-    // 3. Halo
+    // Halo
     if (_haloImg) {
       const haloSize = canvasHeight;
       const haloX = centerX - haloSize / 2 + offsetX;
@@ -152,7 +143,7 @@ module.exports = async (req, res) => {
       ctx.drawImage(_haloImg, haloX, haloY, haloSize, haloSize);
     }
 
-    // 4. Teks kanan (hitam) dengan stroke putih, lalu fill
+    // Teks kanan (hitam) + stroke putih
     ctx.save();
     ctx.font = fontDef;
     ctx.textAlign = "start";
@@ -174,26 +165,29 @@ module.exports = async (req, res) => {
     ctx.resetTransform();
     ctx.restore();
 
-    // 5. Hollow path (polygon dari settings)
-    const graphX = centerX - canvasHeight / 2 + offsetX;
-    const graphY = offsetY;
+    // ========== HOLLOW PATH: PARALLELOGRAM TIPIS VERTIKAL (efek lancip) ==========
+    const slantWidth = Math.abs(shear) * canvasHeight * 0.8; // lebar potongan
+    const halfSlant = slantWidth / 2;
+    // Offset horizontal karena shear membuat parallelogram miring
+    const shearOffset = shear * canvasHeight;
+    
+    ctx.save();
     ctx.beginPath();
-    const points = SETTINGS.hollowPath;
-    for (let i = 0; i < points.length; i++) {
-      const x = graphX + (points[i][0] / 500) * canvasHeight;
-      const y = graphY + (points[i][1] / 500) * canvasHeight;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
+    ctx.moveTo(centerX - halfSlant, 0);
+    ctx.lineTo(centerX + halfSlant, 0);
+    ctx.lineTo(centerX + halfSlant + shearOffset, canvasHeight);
+    ctx.lineTo(centerX - halfSlant + shearOffset, canvasHeight);
     ctx.closePath();
+    
     if (isTransparent) {
       ctx.globalCompositeOperation = "destination-out";
     }
     ctx.fillStyle = "white";
     ctx.fill();
     ctx.globalCompositeOperation = "source-over";
+    ctx.restore();
 
-    // 6. Cross (di atas semua)
+    // Cross (di atas semua)
     if (_crossImg) {
       const crossSize = canvasHeight;
       const crossX = centerX - crossSize / 2 + offsetX;
@@ -201,7 +195,7 @@ module.exports = async (req, res) => {
       ctx.drawImage(_crossImg, crossX, crossY, crossSize, crossSize);
     }
 
-    // 7. Crop seperti generateImg()
+    // Crop seperti generateImg()
     let outputCanvas;
     if (textWidthL + padding < baseCanvasWidth / 2 || textWidthR + padding < baseCanvasWidth / 2) {
       const cropWidth = textWidthL + textWidthR + padding * 2;
