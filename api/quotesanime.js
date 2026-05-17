@@ -64,8 +64,9 @@ try {
   console.warn("[quotesanime] Font load warning:", e.message);
 }
 
+// SESUDAH: taruh Arial/DejaVu sebelum sans-serif, pastikan ada font system yang punya spasi
 function fontStack(size) {
-  return `${size}px ${FONT_FAMILY}, GlowSansSC, ${FONT_FAMILY_FALLBACK}`;
+  return `${size}px ${FONT_FAMILY}, GlowSansSC, Arial, "Liberation Sans", DejaVu Sans, ${FONT_FAMILY_FALLBACK}`;
 }
 
 // ========== TEXT WRAP ==========
