@@ -16,6 +16,12 @@ try {
 const F = (size, bold = true) =>
   `${bold ? "bold" : "normal"} ${size}px ${hasEmojiFont ? "'InterBold','NotoColorEmoji'" : "InterBold"}`;
 
+// Helper font untuk chat (mendukung emoji)
+function chatFont(size, weight = 'normal') {
+  const family = hasEmojiFont ? "'Inter', 'NotoColorEmoji'" : "Inter";
+  return `${weight} ${size}px ${family}`;
+}
+
 // ── SHARED HELPERS ───────────────────────────────────────────
 function rr(ctx, x, y, w, h, r, fill, stroke) {
   r = Math.min(r, w / 2, h / 2);
@@ -435,11 +441,12 @@ async function handleChat(req, res) {
   const dummy = createCanvas(1400, 10);
   const dc    = dummy.getContext("2d");
 
-  dc.font = `bold ${NAME_SIZE}px InterBold`;
+  // PERBAIKAN: gunakan chatFont untuk mendukung emoji
+  dc.font = chatFont(NAME_SIZE, 'bold');
   const dispName = name.length > 22 ? name.slice(0, 21) + "…" : name;
   const nameW = dc.measureText(dispName).width;
 
-  dc.font = `normal ${MSG_SIZE}px Inter`;
+  dc.font = chatFont(MSG_SIZE);
   const maxMsgW = MAX_BW - PADX * 2;
 
   // Ganti literal \n dari query string ke newline asli
@@ -447,7 +454,7 @@ async function handleChat(req, res) {
   const msgLines = wrapText(dc, msgRaw, maxMsgW);
   const msgTextW = msgLines.reduce((mx, l) => Math.max(mx, dc.measureText(l).width), 0);
 
-  dc.font = `normal ${TIME_SIZE}px Inter`;
+  dc.font = chatFont(TIME_SIZE);
   const timeStr = `${time}  ✓✓`;
   const timeW   = dc.measureText(timeStr).width;
 
@@ -539,7 +546,7 @@ async function handleChat(req, res) {
 
   // ── Nama ─────────────────────────────────────────────────
   let ty = by + PADY;
-  ctx.font      = `bold ${NAME_SIZE}px InterBold`;
+  ctx.font = chatFont(NAME_SIZE, 'bold');
   ctx.fillStyle = namecolor;
   ctx.shadowColor = namecolor + "55";
   ctx.shadowBlur  = 10;
@@ -548,7 +555,7 @@ async function handleChat(req, res) {
   ty += nameH;
 
   // ── Baris pesan ───────────────────────────────────────────
-  ctx.font      = `normal ${MSG_SIZE}px Inter`;
+  ctx.font = chatFont(MSG_SIZE);
   ctx.fillStyle = textColor;
   for (const line of msgLines) {
     ctx.fillText(line, bx + PADX, ty + MSG_SIZE);
@@ -556,7 +563,7 @@ async function handleChat(req, res) {
   }
 
   // ── Timestamp + centang ───────────────────────────────────
-  ctx.font      = `normal ${TIME_SIZE}px Inter`;
+  ctx.font = chatFont(TIME_SIZE);
   ctx.fillStyle = timeColor;
   const tw = ctx.measureText(timeStr).width;
   ctx.fillText(timeStr, bx + bubbleW - PADX - tw, by + bubbleH - PADY + 4);
