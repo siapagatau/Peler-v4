@@ -1,50 +1,44 @@
 const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
-const fs = require("fs");
+const fs   = require("fs");
 const path = require("path");
 
-// ========== FONT LOADING ==========
-let fontLoaded = false;
+// ── FONTS (tiru persis pola qc.js) ───────────────────────────
+let hasEmojiFont = false;
 try {
-  GlobalFonts.register(
-    fs.readFileSync(path.join(process.cwd(), "assets/fonts/NotoColorEmoji.ttf")),
-    "NotoColorEmoji"
-  );
-  fontLoaded = true;
-} catch (e) {
-  console.warn("[subtitle] Font NotoColorEmoji.ttf not found, falling back to sans-serif:", e.message);
-}
+  GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")), "Inter");
+  GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf")),    "InterBold");
+  try {
+    GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf")), "NotoColorEmoji");
+    hasEmojiFont = true;
+  } catch (_) {}
+} catch (e) { console.log("[subtitle] FONT ERROR:", e.message); }
 
-const FONT_FAMILY = fontLoaded ? "NotoColorEmoji" : "sans-serif";
+// Pakai pola F() yang sama seperti qc.js
+const F = (size, bold = true) =>
+  `${bold ? "bold" : "normal"} ${size}px ${hasEmojiFont ? "'InterBold','NotoColorEmoji'" : "InterBold"}`;
 
-// ========== TEXT WRAP ==========
-/**
- * Wrap text into lines based on pixel width measured by canvas ctx.
- * @param {CanvasRenderingContext2D} ctx
- * @param {string} text
- * @param {number} maxWidth - max pixel width per line
- * @returns {string[]}
- */
+// ── TEXT WRAP ────────────────────────────────────────────────
 function wrapTextPixel(ctx, text, maxWidth) {
-  const words = text.split(" ");
-  const lines = [];
-  let current = "";
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (ctx.measureText(candidate).width <= maxWidth) {
-      current = candidate;
-    } else {
-      if (current) lines.push(current);
-      // If a single word is too wide, push it anyway
-      current = word;
+  const hardLines = String(text).split("\n");
+  const result = [];
+  for (const hard of hardLines) {
+    const words = hard.split(" ");
+    let cur = "";
+    for (const word of words) {
+      const test = cur ? cur + " " + word : word;
+      if (ctx.measureText(test).width > maxWidth && cur) {
+        result.push(cur);
+        cur = word;
+      } else {
+        cur = test;
+      }
     }
+    result.push(cur);
   }
-
-  if (current) lines.push(current);
-  return lines;
+  return result;
 }
 
-// ========== MAIN HANDLER ==========
+// ── MAIN HANDLER ─────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -52,7 +46,7 @@ module.exports = async (req, res) => {
 
   try {
     const {
-      text = "Masukkan teks subtitle di sini.",
+      text     = "Masukkan teks subtitle di sini.",
       image: imageUrl = "",
     } = req.query;
 
@@ -73,49 +67,41 @@ module.exports = async (req, res) => {
 
     // ---- Canvas setup ----
     const canvas = createCanvas(w, h);
-    const ctx = canvas.getContext("2d");
+    const ctx    = canvas.getContext("2d");
 
     // 1. Draw base image
     ctx.drawImage(baseImg, 0, 0, w, h);
 
-    // ===============================
-    // RESPONSIVE SIZE SYSTEM
-    // ===============================
-    const fontSize   = Math.max(24, Math.floor(w * 0.045)); // 4.5% lebar
-    const maxWidth   = Math.floor(w * 0.85);
-    const padding    = Math.max(15, Math.floor(w * 0.03));
-    const bottomMargin = Math.floor(h * 0.035);             // 3.5% dari bawah
-    const lineHeight = Math.floor(fontSize * 1.35);
+    // ── RESPONSIVE SIZE SYSTEM ────────────────────────────────
+    const fontSize     = Math.max(24, Math.floor(w * 0.045));
+    const maxWidth     = Math.floor(w * 0.85);
+    const padding      = Math.max(15, Math.floor(w * 0.03));
+    const bottomMargin = Math.floor(h * 0.035);
+    const lineHeight   = Math.floor(fontSize * 1.35);
 
     // ---- Measure wrapped lines ----
-    ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
-    const lines = wrapTextPixel(ctx, text.trim(), maxWidth);
+    ctx.font = F(fontSize, true);
+    const lines = wrapTextPixel(ctx, text.replace(/\\n/g, "\n").trim(), maxWidth);
 
-    // Total height of the text block
     const textBlockH = lines.length * lineHeight;
 
     // ---- Box dimensions ----
     const boxHeight = textBlockH + padding * 2;
     let boxY = h - boxHeight - bottomMargin;
-    if (boxY < 0) boxY = h - boxHeight; // safety
+    if (boxY < 0) boxY = h - boxHeight;
 
-    // ===============================
-    // 2. Draw semi-transparent box
-    // ===============================
+    // 2. Semi-transparent box
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
     ctx.fillRect(0, boxY, w, boxHeight);
 
-    // ===============================
-    // 3. Draw subtitle text
-    // ===============================
-    ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
+    // 3. Subtitle text
+    ctx.font         = F(fontSize, true);
+    ctx.fillStyle    = "#ffffff";
+    ctx.textAlign    = "center";
     ctx.textBaseline = "top";
 
-    // Optional: subtle text shadow for legibility
-    ctx.shadowColor = "rgba(0,0,0,0.85)";
-    ctx.shadowBlur = 6;
+    ctx.shadowColor   = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur    = 6;
     ctx.shadowOffsetX = 1;
     ctx.shadowOffsetY = 1;
 
@@ -124,11 +110,9 @@ module.exports = async (req, res) => {
       ctx.fillText(lines[i], w / 2, textStartY + i * lineHeight);
     }
 
-    // Reset shadow
     ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
+    ctx.shadowBlur  = 0;
 
-    // ---- Output as PNG ----
     res.setHeader("Content-Type", "image/png");
     res.send(canvas.toBuffer("image/png"));
 
