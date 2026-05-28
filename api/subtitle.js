@@ -6,15 +6,15 @@ const path = require("path");
 let fontLoaded = false;
 try {
   GlobalFonts.register(
-    fs.readFileSync(path.join(process.cwd(), "assets/fonts/Value.ttf")),
-    "ValueFont"
+    fs.readFileSync(path.join(process.cwd(), "assets/fonts/NotoColorEmoji.ttf")),
+    "NotoColorEmoji"
   );
   fontLoaded = true;
 } catch (e) {
-  console.warn("[subtitle] Font Value.ttf not found, falling back to sans-serif:", e.message);
+  console.warn("[subtitle] Font NotoColorEmoji.ttf not found, falling back to sans-serif:", e.message);
 }
 
-const FONT_FAMILY = fontLoaded ? "ValueFont" : "sans-serif";
+const FONT_FAMILY = fontLoaded ? "NotoColorEmoji" : "sans-serif";
 
 // ========== TEXT WRAP ==========
 /**
