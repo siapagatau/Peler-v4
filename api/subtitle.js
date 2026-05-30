@@ -2,7 +2,7 @@ const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 const fs   = require("fs");
 const path = require("path");
 
-// ── FONTS (tiru persis pola qc.js) ───────────────────────────
+// ── FONTS ─────────────────────────────────────────────────────
 let hasEmojiFont = false;
 try {
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")), "Inter");
@@ -13,11 +13,10 @@ try {
   } catch (_) {}
 } catch (e) { console.log("[subtitle] FONT ERROR:", e.message); }
 
-// Pakai pola F() yang sama seperti qc.js
 const F = (size, bold = true) =>
   `${bold ? "bold" : "normal"} ${size}px ${hasEmojiFont ? "'InterBold','NotoColorEmoji'" : "InterBold"}`;
 
-// ── TEXT WRAP ────────────────────────────────────────────────
+// ── TEXT WRAP ─────────────────────────────────────────────────
 function wrapTextPixel(ctx, text, maxWidth) {
   const hardLines = String(text).split("\n");
   const result = [];
@@ -38,7 +37,7 @@ function wrapTextPixel(ctx, text, maxWidth) {
   return result;
 }
 
-// ── MAIN HANDLER ─────────────────────────────────────────────
+// ── MAIN HANDLER ──────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -62,39 +61,53 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "Gagal load gambar: " + e.message });
     }
 
-    const w = baseImg.width;
-    const h = baseImg.height;
-
-    // ---- Canvas setup ----
-    const canvas = createCanvas(w, h);
-    const ctx    = canvas.getContext("2d");
-
-    // 1. Draw base image
-    ctx.drawImage(baseImg, 0, 0, w, h);
+    const imgW = baseImg.width;
+    const imgH = baseImg.height;
 
     // ── RESPONSIVE SIZE SYSTEM ────────────────────────────────
-    const fontSize     = Math.max(24, Math.floor(w * 0.045));
-    const maxWidth     = Math.floor(w * 0.85);
-    const padding      = Math.max(15, Math.floor(w * 0.03));
-    const bottomMargin = Math.floor(h * 0.035);
+    const fontSize     = Math.max(24, Math.floor(imgW * 0.045));
+    const maxWidth     = Math.floor(imgW * 0.85);
+    const padding      = Math.max(15, Math.floor(imgW * 0.03));
+    const bottomMargin = Math.floor(imgH * 0.035);
     const lineHeight   = Math.floor(fontSize * 1.35);
 
-    // ---- Measure wrapped lines ----
-    ctx.font = F(fontSize, true);
-    const lines = wrapTextPixel(ctx, text.replace(/\\n/g, "\n").trim(), maxWidth);
+    // ---- Measure wrapped lines (pakai canvas sementara) ----
+    const tmpCanvas = createCanvas(imgW, imgH);
+    const tmpCtx    = tmpCanvas.getContext("2d");
+    tmpCtx.font     = F(fontSize, true);
 
+    const lines      = wrapTextPixel(tmpCtx, text.replace(/\\n/g, "\n").trim(), maxWidth);
     const textBlockH = lines.length * lineHeight;
+    const boxHeight  = textBlockH + padding * 2;
 
-    // ---- Box dimensions ----
-    const boxHeight = textBlockH + padding * 2;
-    let boxY = h - boxHeight - bottomMargin;
-    if (boxY < 0) boxY = h - boxHeight;
+    // ---- Hitung posisi box ----
+    // Idealnya di atas bottomMargin dari bawah gambar
+    const idealBoxY = imgH - boxHeight - bottomMargin;
 
-    // 2. Semi-transparent box
+    // Jika teks muat di dalam gambar → canvas tetap imgH
+    // Jika tidak muat → perbesar canvas ke atas agar tidak terpotong
+    const extraHeight = idealBoxY < 0 ? Math.abs(idealBoxY) : 0;
+    const canvasH     = imgH + extraHeight;
+    const boxY        = extraHeight > 0 ? 0 : idealBoxY;
+
+    // ---- Canvas final ----
+    const canvas = createCanvas(imgW, canvasH);
+    const ctx    = canvas.getContext("2d");
+
+    // 1. Background hitam untuk area tambahan (jika ada)
+    if (extraHeight > 0) {
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, imgW, canvasH);
+    }
+
+    // 2. Draw base image (digeser ke bawah jika canvas diperluas)
+    ctx.drawImage(baseImg, 0, extraHeight, imgW, imgH);
+
+    // 3. Semi-transparent box
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.fillRect(0, boxY, w, boxHeight);
+    ctx.fillRect(0, boxY, imgW, boxHeight);
 
-    // 3. Subtitle text
+    // 4. Subtitle text
     ctx.font         = F(fontSize, true);
     ctx.fillStyle    = "#ffffff";
     ctx.textAlign    = "center";
@@ -107,7 +120,7 @@ module.exports = async (req, res) => {
 
     const textStartY = boxY + padding;
     for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], w / 2, textStartY + i * lineHeight);
+      ctx.fillText(lines[i], imgW / 2, textStartY + i * lineHeight);
     }
 
     ctx.shadowColor = "transparent";
