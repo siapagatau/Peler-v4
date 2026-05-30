@@ -2,7 +2,7 @@ const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 const fs   = require("fs");
 const path = require("path");
 
-// ── FONTS ─────────────────────────────────────────────────────
+// ── FONTS ────────────────────────────────────────────────────
 let hasEmojiFont = false;
 try {
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")), "Inter");
@@ -16,14 +16,43 @@ try {
 const F = (size, bold = true) =>
   `${bold ? "bold" : "normal"} ${size}px ${hasEmojiFont ? "'InterBold','NotoColorEmoji'" : "InterBold"}`;
 
-// ── TEXT WRAP ─────────────────────────────────────────────────
+// ── TEXT WRAP (FIXED) ────────────────────────────────────────
 function wrapTextPixel(ctx, text, maxWidth) {
   const hardLines = String(text).split("\n");
   const result = [];
+
   for (const hard of hardLines) {
+    // Kalau baris kosong, tetap push supaya newline explicit dihormati
+    if (hard.trim() === "") {
+      result.push("");
+      continue;
+    }
+
     const words = hard.split(" ");
     let cur = "";
+
     for (const word of words) {
+      // Handle kata tunggal yang lebih panjang dari maxWidth
+      if (ctx.measureText(word).width > maxWidth) {
+        if (cur) {
+          result.push(cur);
+          cur = "";
+        }
+        // Pecah kata per karakter
+        let charLine = "";
+        for (const char of word) {
+          const testChar = charLine + char;
+          if (ctx.measureText(testChar).width > maxWidth && charLine) {
+            result.push(charLine);
+            charLine = char;
+          } else {
+            charLine = testChar;
+          }
+        }
+        if (charLine) cur = charLine;
+        continue;
+      }
+
       const test = cur ? cur + " " + word : word;
       if (ctx.measureText(test).width > maxWidth && cur) {
         result.push(cur);
@@ -32,12 +61,14 @@ function wrapTextPixel(ctx, text, maxWidth) {
         cur = test;
       }
     }
-    result.push(cur);
+
+    if (cur) result.push(cur);
   }
+
   return result;
 }
 
-// ── MAIN HANDLER ──────────────────────────────────────────────
+// ── MAIN HANDLER ─────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -61,53 +92,46 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "Gagal load gambar: " + e.message });
     }
 
-    const imgW = baseImg.width;
-    const imgH = baseImg.height;
+    const w = baseImg.width;
+    const h = baseImg.height;
 
-    // ── RESPONSIVE SIZE SYSTEM ────────────────────────────────
-    const fontSize     = Math.max(24, Math.floor(imgW * 0.045));
-    const maxWidth     = Math.floor(imgW * 0.85);
-    const padding      = Math.max(15, Math.floor(imgW * 0.03));
-    const bottomMargin = Math.floor(imgH * 0.035);
-    const lineHeight   = Math.floor(fontSize * 1.35);
-
-    // ---- Measure wrapped lines (pakai canvas sementara) ----
-    const tmpCanvas = createCanvas(imgW, imgH);
-    const tmpCtx    = tmpCanvas.getContext("2d");
-    tmpCtx.font     = F(fontSize, true);
-
-    const lines      = wrapTextPixel(tmpCtx, text.replace(/\\n/g, "\n").trim(), maxWidth);
-    const textBlockH = lines.length * lineHeight;
-    const boxHeight  = textBlockH + padding * 2;
-
-    // ---- Hitung posisi box ----
-    // Idealnya di atas bottomMargin dari bawah gambar
-    const idealBoxY = imgH - boxHeight - bottomMargin;
-
-    // Jika teks muat di dalam gambar → canvas tetap imgH
-    // Jika tidak muat → perbesar canvas ke atas agar tidak terpotong
-    const extraHeight = idealBoxY < 0 ? Math.abs(idealBoxY) : 0;
-    const canvasH     = imgH + extraHeight;
-    const boxY        = extraHeight > 0 ? 0 : idealBoxY;
-
-    // ---- Canvas final ----
-    const canvas = createCanvas(imgW, canvasH);
+    // ---- Canvas setup ----
+    const canvas = createCanvas(w, h);
     const ctx    = canvas.getContext("2d");
 
-    // 1. Background hitam untuk area tambahan (jika ada)
-    if (extraHeight > 0) {
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(0, 0, imgW, canvasH);
-    }
+    // 1. Draw base image
+    ctx.drawImage(baseImg, 0, 0, w, h);
 
-    // 2. Draw base image (digeser ke bawah jika canvas diperluas)
-    ctx.drawImage(baseImg, 0, extraHeight, imgW, imgH);
+    // ── RESPONSIVE SIZE SYSTEM ────────────────────────────────
+    const fontSize     = Math.max(24, Math.floor(w * 0.045));
+    const padding      = Math.max(15, Math.floor(w * 0.03));
+    const bottomMargin = Math.floor(h * 0.035);
+    const lineHeight   = Math.floor(fontSize * 1.35);
 
-    // 3. Semi-transparent box
+    // ✅ FIX: Set font DULU sebelum measureText dipanggil di wrapTextPixel
+    ctx.font = F(fontSize, true);
+
+    // ✅ FIX: maxWidth dikurangi (padding kiri+kanan) supaya ada breathing room
+    const maxWidth = Math.floor(w * 0.85) - padding * 2;
+
+    // ---- Measure wrapped lines ----
+    const cleanText = text.replace(/\\n/g, "\n").trim();
+    const lines = wrapTextPixel(ctx, cleanText, maxWidth);
+
+    const textBlockH = lines.length * lineHeight;
+
+    // ---- Box dimensions ----
+    const boxHeight = textBlockH + padding * 2;
+    let boxY = h - boxHeight - bottomMargin;
+
+    // ✅ FIX: Clamp boxY supaya tidak negatif (teks sangat panjang)
+    if (boxY < 0) boxY = 0;
+
+    // 2. Semi-transparent box
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.fillRect(0, boxY, imgW, boxHeight);
+    ctx.fillRect(0, boxY, w, boxHeight);
 
-    // 4. Subtitle text
+    // 3. Subtitle text
     ctx.font         = F(fontSize, true);
     ctx.fillStyle    = "#ffffff";
     ctx.textAlign    = "center";
@@ -120,7 +144,7 @@ module.exports = async (req, res) => {
 
     const textStartY = boxY + padding;
     for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], imgW / 2, textStartY + i * lineHeight);
+      ctx.fillText(lines[i], w / 2, textStartY + i * lineHeight);
     }
 
     ctx.shadowColor = "transparent";
