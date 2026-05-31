@@ -95,9 +95,9 @@ module.exports = async (req, res) => {
 
     // ── RESPONSIVE SIZE SYSTEM ────────────────────────────────
     const fontSize     = Math.max(24, Math.floor(w * 0.045));
-    const padding      = Math.max(8, Math.floor(fontSize * 0.4));  // ← lebih kecil, proporsional ke font
+    const padding      = Math.max(6, Math.floor(fontSize * 0.25));
     const bottomMargin = Math.floor(h * 0.035);
-    const lineHeight   = Math.floor(fontSize * 1.3);               // ← sedikit lebih rapat
+    const lineHeight   = Math.floor(fontSize * 1.2);
 
     ctx.font = F(fontSize, true);
 
@@ -121,14 +121,14 @@ module.exports = async (req, res) => {
     ctx.font         = F(fontSize, true);
     ctx.fillStyle    = "#ffffff";
     ctx.textAlign    = "center";
-    ctx.textBaseline = "top";
+    ctx.textBaseline = "middle";
 
     ctx.shadowColor   = "rgba(0,0,0,0.85)";
     ctx.shadowBlur    = 6;
     ctx.shadowOffsetX = 1;
     ctx.shadowOffsetY = 1;
 
-    const textStartY = boxY + padding;
+    const textStartY = boxY + padding + lineHeight / 2;
     for (let i = 0; i < lines.length; i++) {
       ctx.fillText(lines[i], w / 2, textStartY + i * lineHeight);
     }
