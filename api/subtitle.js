@@ -16,13 +16,12 @@ try {
 const F = (size, bold = true) =>
   `${bold ? "bold" : "normal"} ${size}px ${hasEmojiFont ? "'InterBold','NotoColorEmoji'" : "InterBold"}`;
 
-// ── TEXT WRAP (FIXED) ────────────────────────────────────────
+// ── TEXT WRAP ────────────────────────────────────────────────
 function wrapTextPixel(ctx, text, maxWidth) {
   const hardLines = String(text).split("\n");
   const result = [];
 
   for (const hard of hardLines) {
-    // Kalau baris kosong, tetap push supaya newline explicit dihormati
     if (hard.trim() === "") {
       result.push("");
       continue;
@@ -32,13 +31,8 @@ function wrapTextPixel(ctx, text, maxWidth) {
     let cur = "";
 
     for (const word of words) {
-      // Handle kata tunggal yang lebih panjang dari maxWidth
       if (ctx.measureText(word).width > maxWidth) {
-        if (cur) {
-          result.push(cur);
-          cur = "";
-        }
-        // Pecah kata per karakter
+        if (cur) { result.push(cur); cur = ""; }
         let charLine = "";
         for (const char of word) {
           const testChar = charLine + char;
@@ -84,7 +78,6 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "Parameter 'image' (URL) wajib diisi." });
     }
 
-    // ---- Load base image ----
     let baseImg;
     try {
       baseImg = await loadImage(imageUrl);
@@ -95,26 +88,21 @@ module.exports = async (req, res) => {
     const w = baseImg.width;
     const h = baseImg.height;
 
-    // ---- Canvas setup ----
     const canvas = createCanvas(w, h);
     const ctx    = canvas.getContext("2d");
 
-    // 1. Draw base image
     ctx.drawImage(baseImg, 0, 0, w, h);
 
     // ── RESPONSIVE SIZE SYSTEM ────────────────────────────────
     const fontSize     = Math.max(24, Math.floor(w * 0.045));
-    const padding      = Math.max(15, Math.floor(w * 0.03));
+    const padding      = Math.max(8, Math.floor(fontSize * 0.4));  // ← lebih kecil, proporsional ke font
     const bottomMargin = Math.floor(h * 0.035);
-    const lineHeight   = Math.floor(fontSize * 1.35);
+    const lineHeight   = Math.floor(fontSize * 1.3);               // ← sedikit lebih rapat
 
-    // ✅ FIX: Set font DULU sebelum measureText dipanggil di wrapTextPixel
     ctx.font = F(fontSize, true);
 
-    // ✅ FIX: maxWidth dikurangi (padding kiri+kanan) supaya ada breathing room
     const maxWidth = Math.floor(w * 0.85) - padding * 2;
 
-    // ---- Measure wrapped lines ----
     const cleanText = text.replace(/\\n/g, "\n").trim();
     const lines = wrapTextPixel(ctx, cleanText, maxWidth);
 
@@ -123,15 +111,13 @@ module.exports = async (req, res) => {
     // ---- Box dimensions ----
     const boxHeight = textBlockH + padding * 2;
     let boxY = h - boxHeight - bottomMargin;
-
-    // ✅ FIX: Clamp boxY supaya tidak negatif (teks sangat panjang)
     if (boxY < 0) boxY = 0;
 
-    // 2. Semi-transparent box
+    // Semi-transparent box
     ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
     ctx.fillRect(0, boxY, w, boxHeight);
 
-    // 3. Subtitle text
+    // Subtitle text
     ctx.font         = F(fontSize, true);
     ctx.fillStyle    = "#ffffff";
     ctx.textAlign    = "center";
