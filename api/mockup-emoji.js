@@ -3,20 +3,46 @@ const fs   = require("fs");
 const path = require("path");
 
 // ── FONTS ────────────────────────────────────────────────────
+let hasMonoFont  = false;
 let hasEmojiFont = false;
+
+// Try JetBrains Mono first
 try {
   GlobalFonts.register(
     fs.readFileSync(path.join(process.cwd(), "fonts/JetBrainsMono-Regular.ttf")),
     "Mono"
   );
-} catch (_) {}
+  hasMonoFont = true;
+  console.log("[terminal-mockup] JetBrainsMono loaded");
+} catch (_) {
+  console.log("[terminal-mockup] JetBrainsMono not found, trying Inter...");
+}
+
+// Fallback to Inter (same as subtitle.js)
+if (!hasMonoFont) {
+  try {
+    GlobalFonts.register(
+      fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")),
+      "Mono"
+    );
+    hasMonoFont = true;
+    console.log("[terminal-mockup] Inter loaded as Mono fallback");
+  } catch (_) {
+    console.log("[terminal-mockup] Inter not found either");
+  }
+}
+
+// Emoji font
 try {
   GlobalFonts.register(
     fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf")),
     "NotoColorEmoji"
   );
   hasEmojiFont = true;
-} catch (_) {}
+  console.log("[terminal-mockup] NotoColorEmoji loaded");
+} catch (_) {
+  console.log("[terminal-mockup] NotoColorEmoji not found");
+}
 
 // ── PRETTY-PRINT JSON ────────────────────────────────────────
 function prettyJson(text) {
