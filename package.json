@@ -6,6 +6,6 @@
   },
   "dependencies": {
     "@napi-rs/canvas": "latest",
-    "youtubei.js": "latest"
+    "ytdl-core": "latest"
   }
 }
