@@ -5,6 +5,7 @@
     "node": "24.x"
   },
   "dependencies": {
-    "@napi-rs/canvas": "latest"
+    "@napi-rs/canvas": "latest",
+    "@distube/ytdl-core": "latest"
   }
 }
