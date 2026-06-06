@@ -1,10 +1,46 @@
 // api/ytmp3.js
-// Compatible dengan playget: response shape sama dengan api.romzz.biz.id
-// ─────────────────────────────────────────────────────────────────────
 
 const ytdl = require("@distube/ytdl-core");
+const fs   = require("fs");
+const path = require("path");
 
-// ── Helper: seconds → m:ss ────────────────────────────────────────────
+// ── Load cookies ──────────────────────────────────────────────────────
+function loadCookies() {
+  try {
+    const raw = process.env.YT_COOKIES
+      ? process.env.YT_COOKIES
+      : fs.readFileSync(path.join(process.cwd(), "cookies.txt"), "utf-8");
+
+    const cookies = [];
+
+    for (const line of raw.split("\n")) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+
+      const parts = t.split("\t");
+      if (parts.length < 7) continue;
+
+      const [domain, , cookiePath_, secure, , name, value] = parts;
+      cookies.push({
+        domain,
+        path: cookiePath_,
+        secure: secure === "TRUE",
+        name,
+        value,
+      });
+    }
+
+    console.log(`[ytmp3] Loaded ${cookies.length} cookies`);
+    return cookies;
+  } catch (_) {
+    console.warn("[ytmp3] No cookies — bot detection may trigger");
+    return [];
+  }
+}
+
+const COOKIES = loadCookies();
+
+// ── Helpers ───────────────────────────────────────────────────────────
 function toTimestamp(sec) {
   if (!sec || isNaN(sec)) return "0:00";
   const s = parseInt(sec);
@@ -13,11 +49,9 @@ function toTimestamp(sec) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-// ── Helper: pilih format audio terbaik ────────────────────────────────
 function pickAudioFormat(info) {
   const formats = ytdl.filterFormats(info.formats, "audioonly");
 
-  // Urutan preferensi: mp4a (AAC) → webm (Opus) → apapun yang ada
   const mp4a = formats
     .filter((f) => f.mimeType?.includes("audio/mp4"))
     .sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0))[0];
@@ -30,16 +64,30 @@ function pickAudioFormat(info) {
 
   if (webm) return webm;
 
-  // Last resort
-  return formats.sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0))[0];
+  return formats
+    .sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0))[0];
 }
 
-// ── Derive clean mimetype string ──────────────────────────────────────
 function cleanMime(mimeType) {
-  if (!mimeType) return "audio/mp4";
-  if (mimeType.includes("mp4")) return "audio/mp4";
+  if (!mimeType)                  return "audio/mp4";
+  if (mimeType.includes("mp4"))  return "audio/mp4";
   if (mimeType.includes("webm")) return "audio/webm";
   return "audio/mp4";
+}
+
+function getRequestOptions() {
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
+
+  if (COOKIES.length > 0) {
+    headers["Cookie"] = COOKIES.map((c) => `${c.name}=${c.value}`).join("; ");
+  }
+
+  return { headers };
 }
 
 // ── Main handler ──────────────────────────────────────────────────────
@@ -49,96 +97,66 @@ module.exports = async (req, res) => {
   if (req.method !== "GET")
     return res.status(405).json({ error: "Method not allowed" });
 
-  const { url, format = "mp3" } = req.query;
+  const { url } = req.query;
 
-  // Validasi param
-  if (!url) {
-    return res.status(400).json({
-      status: false,
-      message: "Missing url param",
-    });
-  }
+  if (!url)
+    return res.status(400).json({ status: false, message: "Missing url param" });
 
-  if (!ytdl.validateURL(url)) {
-    return res.status(400).json({
-      status: false,
-      message: "URL YouTube tidak valid",
-    });
-  }
+  if (!ytdl.validateURL(url))
+    return res.status(400).json({ status: false, message: "URL YouTube tidak valid" });
 
   try {
-    // ── Ambil info video ─────────────────────────────────────
     const info = await ytdl.getInfo(url, {
-      requestOptions: {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-      },
+      requestOptions: getRequestOptions(),
     });
 
     const det = info.videoDetails;
 
-    // ── Metadata — shape identik dengan api.romzz ────────────
     const metadata = {
-      videoId: det.videoId,
-      title: det.title || "Unknown Title",
-      author: det.author?.name || "Unknown",
-      duration: parseInt(det.lengthSeconds) || 0,
-      timestamp: toTimestamp(det.lengthSeconds), // ← dipakai playget
+      videoId:   det.videoId,
+      title:     det.title || "Unknown Title",
+      author:    det.author?.name || "Unknown",
+      duration:  parseInt(det.lengthSeconds) || 0,
+      timestamp: toTimestamp(det.lengthSeconds),
       thumbnail: det.thumbnails?.at(-1)?.url || null,
-      url: `https://www.youtube.com/watch?v=${det.videoId}`,
+      url:       `https://www.youtube.com/watch?v=${det.videoId}`,
     };
 
-    // ── Pilih format audio terbaik ───────────────────────────
     const chosen = pickAudioFormat(info);
 
-    if (!chosen || !chosen.url) {
+    if (!chosen?.url)
       return res.status(500).json({
         status: false,
         message: "Tidak ada format audio tersedia",
       });
-    }
 
     const mime = cleanMime(chosen.mimeType);
     const ext  = mime === "audio/webm" ? "webm" : "mp4";
 
-    // ── Response — shape identik dengan api.romzz ────────────
-    // dl.url langsung dipakai oleh playget untuk sock.sendMessage audio
     return res.status(200).json({
       status: true,
       result: {
         metadata,
         download: {
-          url: chosen.url,                          // ← dipakai playget: dl.url
+          url:      chosen.url,
           filename: `${metadata.title}.${ext}`,
-          mimetype: mime,                           // audio/mp4 atau audio/webm
-          bitrate: chosen.audioBitrate || null,
-          size: chosen.contentLength
-            ? parseInt(chosen.contentLength)
-            : null,
+          mimetype: mime,
+          bitrate:  chosen.audioBitrate  || null,
+          size:     chosen.contentLength ? parseInt(chosen.contentLength) : null,
         },
       },
     });
+
   } catch (err) {
     console.error("[ytmp3]", err.message);
 
-    // Detect error spesifik
-    const isAgeRestricted = err.message?.includes("age");
-    const isPrivate       = err.message?.includes("private");
-    const isNotFound      = err.message?.includes("unavailable");
-
-    const message = isAgeRestricted
-      ? "Video dibatasi usia"
-      : isPrivate
-      ? "Video bersifat private"
-      : isNotFound
-      ? "Video tidak tersedia"
+    const message =
+      err.message?.includes("age")         ? "Video dibatasi usia"
+      : err.message?.includes("private")   ? "Video bersifat private"
+      : err.message?.includes("unavailable") ? "Video tidak tersedia"
+      : err.message?.includes("bot")       ? "Bot detection — perbarui cookies.txt"
       : "Gagal memproses video";
 
-    return res.status(500).json({
-      status: false,
-      message,
-    });
+    return res.status(500).json({ status: false, message });
   }
 };
