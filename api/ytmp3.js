@@ -1,43 +1,8 @@
 // api/ytmp3.js
 
-const ytdl = require("@distube/ytdl-core");
-const fs   = require("fs");
-const path = require("path");
+const { Innertube } = require("youtubei.js");
 
-// ── Load cookies (JSON format) ────────────────────────────────────────
-function loadCookies() {
-  try {
-    let raw;
-
-    if (process.env.YT_COOKIES) {
-      raw = process.env.YT_COOKIES;
-    } else {
-      raw = fs.readFileSync(path.join(process.cwd(), "cookies.json"), "utf-8");
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      console.warn("[ytmp3] cookies.json kosong atau bukan array");
-      return [];
-    }
-
-    // @distube/ytdl-core expects: { name, value }[]
-    const cookies = parsed
-      .filter((c) => c.name && c.value !== undefined)
-      .map((c) => ({ name: c.name, value: String(c.value) }));
-
-    console.log(`[ytmp3] Loaded ${cookies.length} cookies`);
-    return cookies;
-  } catch (err) {
-    console.warn("[ytmp3] Gagal load cookies:", err.message);
-    return [];
-  }
-}
-
-const COOKIES = loadCookies();
-
-// ── Helpers ───────────────────────────────────────────────────────────
+// ── Helper: seconds → m:ss ────────────────────────────────────────────
 function toTimestamp(sec) {
   if (!sec || isNaN(sec)) return "0:00";
   const s = parseInt(sec);
@@ -46,47 +11,20 @@ function toTimestamp(sec) {
   return `${m}:${r.toString().padStart(2, "0")}`;
 }
 
-function pickAudioFormat(info) {
-  const formats = ytdl.filterFormats(info.formats, "audioonly");
+// ── Singleton Innertube instance ──────────────────────────────────────
+let _yt = null;
 
-  if (formats.length === 0) return null;
+async function getYT() {
+  if (_yt) return _yt;
 
-  const mp4a = formats
-    .filter((f) => f.mimeType?.includes("audio/mp4"))
-    .sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0))[0];
+  _yt = await Innertube.create({
+    lang: "en",
+    location: "US",
+    retrieve_player: true,
+  });
 
-  if (mp4a) return mp4a;
-
-  const webm = formats
-    .filter((f) => f.mimeType?.includes("audio/webm"))
-    .sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0))[0];
-
-  if (webm) return webm;
-
-  return formats
-    .sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0))[0];
+  return _yt;
 }
-
-function cleanMime(mimeType) {
-  if (!mimeType)                  return "audio/mp4";
-  if (mimeType.includes("mp4"))  return "audio/mp4";
-  if (mimeType.includes("webm")) return "audio/webm";
-  return "audio/mp4";
-}
-
-// ── ytdl agent dengan cookies ─────────────────────────────────────────
-function createAgent() {
-  if (COOKIES.length === 0) return undefined;
-
-  try {
-    return ytdl.createAgent(COOKIES);
-  } catch (err) {
-    console.warn("[ytmp3] Gagal buat agent:", err.message);
-    return undefined;
-  }
-}
-
-const AGENT = createAgent();
 
 // ── Main handler ──────────────────────────────────────────────────────
 module.exports = async (req, res) => {
@@ -100,46 +38,100 @@ module.exports = async (req, res) => {
   if (!url)
     return res.status(400).json({ status: false, message: "Missing url param" });
 
-  if (!ytdl.validateURL(url))
-    return res.status(400).json({ status: false, message: "URL YouTube tidak valid" });
+  // ── Extract video ID dari URL ─────────────────────────────────────
+  let videoId;
+  try {
+    const parsed = new URL(url);
+    videoId =
+      parsed.searchParams.get("v") ||
+      parsed.pathname.split("/").pop();
+  } catch (_) {
+    return res.status(400).json({ status: false, message: "URL tidak valid" });
+  }
+
+  if (!videoId)
+    return res.status(400).json({ status: false, message: "Video ID tidak ditemukan" });
 
   try {
-    const infoOpts = AGENT ? { agent: AGENT } : {};
-    const info = await ytdl.getInfo(url, infoOpts);
+    const yt   = await getYT();
+    const info = await yt.getInfo(videoId);
 
-    const det = info.videoDetails;
+    // ── Metadata ────────────────────────────────────────────────────
+    const det = info.basic_info;
 
     const metadata = {
-      videoId:   det.videoId,
-      title:     det.title || "Unknown Title",
-      author:    det.author?.name || "Unknown",
-      duration:  parseInt(det.lengthSeconds) || 0,
-      timestamp: toTimestamp(det.lengthSeconds),
-      thumbnail: det.thumbnails?.at(-1)?.url || null,
-      url:       `https://www.youtube.com/watch?v=${det.videoId}`,
+      videoId:   videoId,
+      title:     det.title     || "Unknown Title",
+      author:    det.author    || "Unknown",
+      duration:  det.duration  || 0,
+      timestamp: toTimestamp(det.duration),
+      thumbnail: det.thumbnail?.at(-1)?.url
+                 || `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+      url:       `https://www.youtube.com/watch?v=${videoId}`,
     };
 
-    const chosen = pickAudioFormat(info);
+    // ── Pilih format audio terbaik ───────────────────────────────────
+    const streamingData = info.streaming_data;
 
-    if (!chosen?.url)
+    if (!streamingData)
+      return res.status(500).json({
+        status: false,
+        message: "Tidak ada streaming data",
+      });
+
+    const audioFormats = [
+      ...(streamingData.adaptive_formats || []),
+      ...(streamingData.formats          || []),
+    ].filter((f) => f.has_audio && !f.has_video);
+
+    if (audioFormats.length === 0)
       return res.status(500).json({
         status: false,
         message: "Tidak ada format audio tersedia",
       });
 
-    const mime = cleanMime(chosen.mimeType);
-    const ext  = mime === "audio/webm" ? "webm" : "mp4";
+    // Prioritas: mp4a bitrate tinggi → webm
+    const mp4a = audioFormats
+      .filter((f) => f.mime_type?.includes("audio/mp4"))
+      .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+
+    const webm = audioFormats
+      .filter((f) => f.mime_type?.includes("audio/webm"))
+      .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+
+    const chosen = mp4a || webm || audioFormats[0];
+
+    if (!chosen?.decipher)
+      return res.status(500).json({
+        status: false,
+        message: "Format audio tidak bisa di-decipher",
+      });
+
+    // Dapatkan URL yang sudah di-decipher
+    const audioUrl = chosen.decipher(yt.session.player);
+
+    if (!audioUrl)
+      return res.status(500).json({
+        status: false,
+        message: "Gagal mendapatkan audio URL",
+      });
+
+    const mime = chosen.mime_type?.includes("mp4")  ? "audio/mp4"
+               : chosen.mime_type?.includes("webm") ? "audio/webm"
+               : "audio/mp4";
+
+    const ext = mime === "audio/webm" ? "webm" : "mp4";
 
     return res.status(200).json({
       status: true,
       result: {
         metadata,
         download: {
-          url:      chosen.url,
+          url:      audioUrl,
           filename: `${metadata.title}.${ext}`,
           mimetype: mime,
-          bitrate:  chosen.audioBitrate  || null,
-          size:     chosen.contentLength ? parseInt(chosen.contentLength) : null,
+          bitrate:  chosen.bitrate         || null,
+          size:     chosen.content_length  ? parseInt(chosen.content_length) : null,
         },
       },
     });
@@ -148,11 +140,10 @@ module.exports = async (req, res) => {
     console.error("[ytmp3]", err.message);
 
     const message =
-        err.message?.includes("age")          ? "Video dibatasi usia"
-      : err.message?.includes("private")      ? "Video bersifat private"
-      : err.message?.includes("unavailable")  ? "Video tidak tersedia"
-      : err.message?.includes("bot")          ? "Bot detection — perbarui cookies.json"
-      : err.message?.includes("playable")     ? "Tidak ada format — coba perbarui cookies.json"
+        err.message?.includes("age")         ? "Video dibatasi usia"
+      : err.message?.includes("private")     ? "Video bersifat private"
+      : err.message?.includes("unavailable") ? "Video tidak tersedia"
+      : err.message?.includes("not found")   ? "Video tidak ditemukan"
       : "Gagal memproses video";
 
     return res.status(500).json({ status: false, message });
