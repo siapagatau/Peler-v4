@@ -4,36 +4,33 @@ const ytdl = require("@distube/ytdl-core");
 const fs   = require("fs");
 const path = require("path");
 
-// ── Load cookies ──────────────────────────────────────────────────────
+// ── Load cookies (JSON format) ────────────────────────────────────────
 function loadCookies() {
   try {
-    const raw = process.env.YT_COOKIES
-      ? process.env.YT_COOKIES
-      : fs.readFileSync(path.join(process.cwd(), "cookies.txt"), "utf-8");
+    let raw;
 
-    const cookies = [];
-
-    for (const line of raw.split("\n")) {
-      const t = line.trim();
-      if (!t || t.startsWith("#")) continue;
-
-      const parts = t.split("\t");
-      if (parts.length < 7) continue;
-
-      const [domain, , cookiePath_, secure, , name, value] = parts;
-      cookies.push({
-        domain,
-        path: cookiePath_,
-        secure: secure === "TRUE",
-        name,
-        value,
-      });
+    if (process.env.YT_COOKIES) {
+      raw = process.env.YT_COOKIES;
+    } else {
+      raw = fs.readFileSync(path.join(process.cwd(), "cookies.json"), "utf-8");
     }
+
+    const parsed = JSON.parse(raw);
+
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      console.warn("[ytmp3] cookies.json kosong atau bukan array");
+      return [];
+    }
+
+    // @distube/ytdl-core expects: { name, value }[]
+    const cookies = parsed
+      .filter((c) => c.name && c.value !== undefined)
+      .map((c) => ({ name: c.name, value: String(c.value) }));
 
     console.log(`[ytmp3] Loaded ${cookies.length} cookies`);
     return cookies;
-  } catch (_) {
-    console.warn("[ytmp3] No cookies — bot detection may trigger");
+  } catch (err) {
+    console.warn("[ytmp3] Gagal load cookies:", err.message);
     return [];
   }
 }
@@ -51,6 +48,8 @@ function toTimestamp(sec) {
 
 function pickAudioFormat(info) {
   const formats = ytdl.filterFormats(info.formats, "audioonly");
+
+  if (formats.length === 0) return null;
 
   const mp4a = formats
     .filter((f) => f.mimeType?.includes("audio/mp4"))
@@ -75,20 +74,19 @@ function cleanMime(mimeType) {
   return "audio/mp4";
 }
 
-function getRequestOptions() {
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-      "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    "Accept-Language": "en-US,en;q=0.9",
-  };
+// ── ytdl agent dengan cookies ─────────────────────────────────────────
+function createAgent() {
+  if (COOKIES.length === 0) return undefined;
 
-  if (COOKIES.length > 0) {
-    headers["Cookie"] = COOKIES.map((c) => `${c.name}=${c.value}`).join("; ");
+  try {
+    return ytdl.createAgent(COOKIES);
+  } catch (err) {
+    console.warn("[ytmp3] Gagal buat agent:", err.message);
+    return undefined;
   }
-
-  return { headers };
 }
+
+const AGENT = createAgent();
 
 // ── Main handler ──────────────────────────────────────────────────────
 module.exports = async (req, res) => {
@@ -106,9 +104,8 @@ module.exports = async (req, res) => {
     return res.status(400).json({ status: false, message: "URL YouTube tidak valid" });
 
   try {
-    const info = await ytdl.getInfo(url, {
-      requestOptions: getRequestOptions(),
-    });
+    const infoOpts = AGENT ? { agent: AGENT } : {};
+    const info = await ytdl.getInfo(url, infoOpts);
 
     const det = info.videoDetails;
 
@@ -151,10 +148,11 @@ module.exports = async (req, res) => {
     console.error("[ytmp3]", err.message);
 
     const message =
-      err.message?.includes("age")         ? "Video dibatasi usia"
-      : err.message?.includes("private")   ? "Video bersifat private"
-      : err.message?.includes("unavailable") ? "Video tidak tersedia"
-      : err.message?.includes("bot")       ? "Bot detection — perbarui cookies.txt"
+        err.message?.includes("age")          ? "Video dibatasi usia"
+      : err.message?.includes("private")      ? "Video bersifat private"
+      : err.message?.includes("unavailable")  ? "Video tidak tersedia"
+      : err.message?.includes("bot")          ? "Bot detection — perbarui cookies.json"
+      : err.message?.includes("playable")     ? "Tidak ada format — coba perbarui cookies.json"
       : "Gagal memproses video";
 
     return res.status(500).json({ status: false, message });
