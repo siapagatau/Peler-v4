@@ -287,7 +287,7 @@ async function handleTTQC(req, res) {
   const H_GHOST = 152;
   const H_PILL  = 64;
   const H_BUB   = Math.max(bH + 20, 60);
-  const H_TIME  = 30;
+  const H_TIME  = 22;
   const ITEM_H  = 52;
   const H_MENU  = ITEM_H * 6;
   const H_INPUT = 64;
@@ -335,11 +335,12 @@ async function handleTTQC(req, res) {
   ctx.fillStyle = C.sub;
   ctx.fillText("online", HDR_TX, hMid + 13);
 
-  // Verified badge
+  // Verified badge — sejajar tengah baris nama (hMid - 3 adalah baseline, badge center = baseline - fontSize/2)
   if (verified) {
     ctx.font = BF(15);
-    const nw = ctx.measureText(dn).width;
-    icoVerified(ctx, HDR_TX + nw + 12, hMid - 3);
+    const nw  = ctx.measureText(dn).width;
+    const badgeCY = hMid - 3 - 15 / 2 + 1; // tengah karakter nama
+    icoVerified(ctx, HDR_TX + nw + 12, badgeCY);
   }
 
   // More icon
@@ -437,7 +438,7 @@ async function handleTTQC(req, res) {
   // ── 5. TIMESTAMP ──────────────────────────────────────────
   ctx.font = CF(12);
   ctx.fillStyle = C.sub;
-  ctx.fillText(time, bXX, Y + 19);
+  ctx.fillText(time, bXX, Y + 14);
   Y += H_TIME;
 
   // ── 6. CONTEXT MENU ───────────────────────────────────────
