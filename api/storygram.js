@@ -408,54 +408,38 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── 4b. Caption overlay (center-bottom of card, above avatar row) ─────────
+    // ── 4b. Caption — clean text overlay, no box ──────────────────────────────
     if (caption && caption.trim()) {
-      const CAP_FONT_SZ = 16;
-      const CAP_LH      = 24;
-      const CAP_PAD_X   = 20;
-      const CAP_PAD_Y   = 12;
-      const CAP_MAX_W   = CARD_W - 48;
+      const CAP_FONT_SZ = 15;
+      const CAP_LH      = 22;
+      const CAP_MAX_W   = CARD_W - 56;
+      const CAP_X       = CARD_X + 20;
 
-      // Measure wrapped lines — max 4 baris supaya tidak nabrak progress bar
-      ctx.font = FI(CAP_FONT_SZ);
-      const capLines = wrapText(ctx, caption.trim(), CAP_MAX_W - CAP_PAD_X * 2).slice(0, 4);
-      const capTextH = capLines.length * CAP_LH;
-      const capBoxH  = capTextH + CAP_PAD_Y * 2;
-      const capBoxW  = Math.min(
-        CAP_MAX_W,
-        Math.max(...capLines.map(l => ctx.measureText(l).width)) + CAP_PAD_X * 2
-      );
+      ctx.font = FN(CAP_FONT_SZ);
+      const capLines = wrapText(ctx, caption.trim(), CAP_MAX_W).slice(0, 4);
+      const capTotalH = capLines.length * CAP_LH;
 
-      // Vertically: just above avatar row, with a gap
-      const capBoxY = AV_CY - AV_R - 14 - capBoxH;
-      // Horizontally: centered in card
-      const capBoxX = CARD_X + (CARD_W - capBoxW) / 2;
+      // Bottom of last line sits 14px above avatar top
+      const capBaseY  = AV_CY - AV_R - 14;
+      const capStartY = capBaseY - capTotalH + CAP_LH;
 
-      // Frosted pill background
       ctx.save();
-      ctx.fillStyle = "rgba(0,0,0,0.42)";
-      rr(ctx, capBoxX, capBoxY, capBoxW, capBoxH, 12);
-      ctx.fill();
-      // Ultra-thin border for glass feel
-      ctx.strokeStyle = "rgba(255,255,255,0.13)";
-      ctx.lineWidth = 1;
-      rr(ctx, capBoxX, capBoxY, capBoxW, capBoxH, 12);
-      ctx.stroke();
-      ctx.restore();
-
-      // Caption text — italic, centered, white with slight glow for legibility
-      ctx.save();
-      ctx.font = FI(CAP_FONT_SZ);
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.shadowColor = "rgba(0,0,0,0.7)";
-      ctx.shadowBlur  = 6;
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
-      for (let i = 0; i < capLines.length; i++) {
-        ctx.fillText(capLines[i], capBoxX + capBoxW / 2, capBoxY + CAP_PAD_Y + i * CAP_LH);
-      }
-      ctx.textAlign = "left";
+      ctx.font         = FN(CAP_FONT_SZ);
+      ctx.textAlign    = "left";
       ctx.textBaseline = "alphabetic";
+      ctx.fillStyle    = "rgba(255,255,255,0.95)";
+
+      for (let i = 0; i < capLines.length; i++) {
+        const ly = capStartY + i * CAP_LH;
+        // Two-pass shadow for crisp readability on any photo
+        ctx.shadowColor   = "rgba(0,0,0,0.80)";
+        ctx.shadowBlur    = 14;
+        ctx.shadowOffsetY = 1;
+        ctx.fillText(capLines[i], CAP_X, ly);
+        ctx.shadowBlur    = 4;
+        ctx.fillText(capLines[i], CAP_X, ly);
+      }
+      ctx.shadowColor = "transparent";
       ctx.restore();
     }
 
