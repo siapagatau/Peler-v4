@@ -199,11 +199,33 @@ async function handleTTQC(req, res) {
   const AVR   = 18;   // avatar radius
   const BPX   = 12; const BPY = 9;
 
+  // Ukur lebar menu dulu (auto-fit teks terpanjang)
+  const menuItems = [
+    { label: "Balas",            danger: false, fn: icoReply     },
+    { label: "Teruskan",         danger: false, fn: icoForward   },
+    { label: "Salin",            danger: false, fn: icoCopy      },
+    { label: "Terjemahkan",      danger: false, fn: icoTranslate },
+    { label: "Hapus untuk saya", danger: false, fn: icoTrash     },
+    { label: "Laporkan",         danger: true,  fn: icoFlag      },
+  ];
+  const menuFontSize = 14;
+  const ICO_W   = 22;
+  const ICO_GAP = 10;
+  const M_PADX  = 14;
+  const tmpM = createCanvas(800, 10);
+  const tcM  = tmpM.getContext("2d");
+  tcM.font   = CF(menuFontSize);
+  const maxLabelW = menuItems.reduce((m, it) => Math.max(m, tcM.measureText(it.label).width), 0);
+  const MW = Math.ceil(M_PADX + ICO_W + ICO_GAP + maxLabelW + M_PADX);
+
+  // X start — sejajar kiri bubble & pill
+  const BX_START = 14 + AVR*2 + 8;
+
   // Hitung lebar/tinggi bubble
   const tmp = createCanvas(W * 2, 10);
   const tc  = tmp.getContext("2d");
   tc.font   = CF(FS);
-  const BMAX  = W - (16 + AVR*2 + 8) - 14;
+  const BMAX  = W - BX_START - 14;
   const lines = wrapText(tc, message, BMAX - BPX*2);
   const textW = lines.reduce((m, l) => Math.max(m, tc.measureText(l).width), 0);
   const bW    = Math.min(BMAX, Math.max(textW + BPX*2, 90));
@@ -305,7 +327,7 @@ async function handleTTQC(req, res) {
   const E_PAD  = 12;
   const PH     = 44;
   const PW     = emojis.length * E_SZ + (emojis.length - 1) * E_GAP + E_PAD * 2;
-  const PX     = Math.round((W - PW) / 2);
+  const PX     = BX_START; // sejajar kiri bubble & menu
   const PY     = Y + 6;
 
   ctx.save();
@@ -328,7 +350,7 @@ async function handleTTQC(req, res) {
   const avBY = Y + AVR + 4;
   await drawAvatar(ctx, avatar, avBX, avBY, AVR);
 
-  const bXX = avBX + AVR + 8;
+  const bXX = BX_START;
   const bYY = Y + 2;
 
   // Shadow + fill
@@ -355,7 +377,7 @@ async function handleTTQC(req, res) {
 
   // ── 6. CONTEXT MENU ───────────────────────────────────────
   Y += GAP;
-  const MX = 12, MW = W - 24;
+  const MX = BX_START;
 
   ctx.save();
   ctx.shadowColor = dark ? "rgba(0,0,0,0.55)" : "rgba(80,80,120,0.10)";
@@ -364,31 +386,22 @@ async function handleTTQC(req, res) {
   rr(ctx, MX, Y, MW, H_MENU, 14); ctx.fill();
   ctx.restore();
 
-  const menuItems = [
-    { label: "Balas",            danger: false, fn: icoReply     },
-    { label: "Teruskan",         danger: false, fn: icoForward   },
-    { label: "Salin",            danger: false, fn: icoCopy      },
-    { label: "Terjemahkan",      danger: false, fn: icoTranslate },
-    { label: "Hapus untuk saya", danger: false, fn: icoTrash     },
-    { label: "Laporkan",         danger: true,  fn: icoFlag      },
-  ];
-
   for (let i = 0; i < menuItems.length; i++) {
     const it  = menuItems[i];
     const iy  = Y + i * ITEM_H;
-    const icx = MX + 24;
+    const icx = MX + M_PADX + ICO_W / 2;
     const icy = iy + ITEM_H / 2;
 
     if (i > 0) {
       ctx.fillStyle = C.div;
-      ctx.fillRect(MX + 14, iy, MW - 28, 1);
+      ctx.fillRect(MX + 10, iy, MW - 20, 1);
     }
 
     it.fn(ctx, icx, icy, it.danger ? C.danger : C.icon);
 
-    ctx.font = CF(14);
+    ctx.font = CF(menuFontSize);
     ctx.fillStyle = it.danger ? C.danger : C.itemTxt;
-    ctx.fillText(it.label, MX + 48, icy + 5);
+    ctx.fillText(it.label, MX + M_PADX + ICO_W + ICO_GAP, icy + 5);
   }
 
   Y += H_MENU;
