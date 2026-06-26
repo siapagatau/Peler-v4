@@ -20,7 +20,8 @@ try {
 const FN  = (sz) => `normal ${sz}px ${hasEmoji ? "'Inter','NotoColorEmoji'" : "Inter,sans-serif"}`;
 const FB  = (sz) => `bold ${sz}px ${hasEmoji ? "'InterBold','NotoColorEmoji'" : "InterBold,sans-serif"}`;
 const FSB = (sz) => `600 ${sz}px ${hasEmoji ? "'InterSemiBold','Inter','NotoColorEmoji'" : "InterSemiBold,Inter,sans-serif"}`;
-const FI  = (sz) => `italic normal ${sz}px ${hasEmoji ? "'Inter','NotoColorEmoji'" : "Inter,sans-serif"}`;
+// FE: emoji-first font stack, sama persis dengan ttqc
+const FE  = (sz) => `${sz}px ${hasEmoji ? "'NotoColorEmoji',sans-serif" : "sans-serif"}`;
 
 // ── UTILS ──────────────────────────────────────────────────────────────────
 function rr(ctx, x, y, w, h, r) {
@@ -31,19 +32,6 @@ function rr(ctx, x, y, w, h, r) {
   ctx.arcTo(x + w, y + h, x,     y + h, r);
   ctx.arcTo(x,     y + h, x,     y,     r);
   ctx.arcTo(x,     y,     x + w, y,     r);
-  ctx.closePath();
-}
-
-// Rounded rect with only top corners rounded (for joining panels seamlessly)
-function rrTop(ctx, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x, y + h);
-  ctx.lineTo(x, y + r);
-  ctx.arcTo(x, y, x + r, y, r);
-  ctx.lineTo(x + w - r, y);
-  ctx.arcTo(x + w, y, x + w, y + r, r);
-  ctx.lineTo(x + w, y + h);
   ctx.closePath();
 }
 
@@ -59,13 +47,13 @@ async function loadSafe(url) {
   try { return await loadImage(url); } catch { return null; }
 }
 
-function wrapText(ctx, text, maxW) {
+// Wrap teks dengan deteksi emoji — render per-segment supaya font switch benar
+function wrapText(ctx, text, maxW, fontSize) {
   const out = [];
   for (const hard of String(text).replace(/\\n/g, "\n").split("\n")) {
     const words = hard.split(" ");
     let cur = "";
     for (const word of words) {
-      // Word too long for the line? Break it character by character.
       if (ctx.measureText(word).width > maxW) {
         if (cur) { out.push(cur); cur = ""; }
         let part = "";
@@ -87,6 +75,81 @@ function wrapText(ctx, text, maxW) {
   return out.filter(l => l.length > 0);
 }
 
+// Render teks dengan emoji support (font switch per-segment, seperti ttqc)
+// Karena @napi-rs/canvas tidak auto-fallback font, kita split teks menjadi
+// segmen "emoji" vs "teks biasa" lalu ganti font per-segmen.
+const EMOJI_RE = /(\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu;
+
+function drawTextWithEmoji(ctx, text, x, y, fontSize, color) {
+  const segments = [];
+  let last = 0;
+  let m;
+  EMOJI_RE.lastIndex = 0;
+  while ((m = EMOJI_RE.exec(text)) !== null) {
+    if (m.index > last) segments.push({ t: text.slice(last, m.index), emoji: false });
+    segments.push({ t: m[0], emoji: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segments.push({ t: text.slice(last), emoji: false });
+
+  ctx.fillStyle = color;
+  let curX = x;
+  for (const seg of segments) {
+    if (!seg.t) continue;
+    ctx.font = seg.emoji ? FE(fontSize) : FN(fontSize);
+    ctx.fillText(seg.t, curX, y);
+    curX += ctx.measureText(seg.t).width;
+  }
+}
+
+// measureText untuk mixed teks (untuk wrapping)
+function measureMixed(ctx, text, fontSize) {
+  let w = 0;
+  const segments = [];
+  let last = 0;
+  let m;
+  EMOJI_RE.lastIndex = 0;
+  while ((m = EMOJI_RE.exec(text)) !== null) {
+    if (m.index > last) segments.push({ t: text.slice(last, m.index), emoji: false });
+    segments.push({ t: m[0], emoji: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segments.push({ t: text.slice(last), emoji: false });
+  for (const seg of segments) {
+    ctx.font = seg.emoji ? FE(fontSize) : FN(fontSize);
+    w += ctx.measureText(seg.t).width;
+  }
+  return w;
+}
+
+function wrapTextMixed(ctx, text, maxW, fontSize) {
+  const out = [];
+  for (const hard of String(text).replace(/\\n/g, "\n").split("\n")) {
+    const words = hard.split(" ");
+    let cur = "";
+    for (const word of words) {
+      const ww = measureMixed(ctx, word, fontSize);
+      if (ww > maxW) {
+        if (cur) { out.push(cur); cur = ""; }
+        let part = "";
+        for (const ch of word) {
+          const test = part + ch;
+          if (measureMixed(ctx, test, fontSize) > maxW && part) {
+            out.push(part); part = ch;
+          } else { part = test; }
+        }
+        cur = part;
+        continue;
+      }
+      const test = cur ? cur + " " + word : word;
+      if (measureMixed(ctx, test, fontSize) > maxW && cur) { out.push(cur); cur = word; }
+      else cur = test;
+    }
+    if (cur) out.push(cur);
+  }
+  return out.filter(l => l.length > 0);
+}
+
 function drawCover(ctx, img, x, y, w, h) {
   const ir = img.width / img.height, tr = w / h;
   let sx, sy, sw, sh;
@@ -95,7 +158,6 @@ function drawCover(ctx, img, x, y, w, h) {
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
-// Cheap blur via scale-down + scale-up
 function drawBlur(ctx, img, x, y, w, h, factor = 20) {
   const sw = Math.max(4, Math.round(w / factor));
   const sh = Math.max(4, Math.round(h / factor));
@@ -105,18 +167,13 @@ function drawBlur(ctx, img, x, y, w, h, factor = 20) {
   ctx.drawImage(tmp, 0, 0, sw, sh, x, y, w, h);
 }
 
-// Subtle film-grain noise — breaks up flat gradients so the canvas
-// doesn't look like a plain CSS background.
 function drawNoise(ctx, x, y, w, h, opacity = 0.035) {
   const n = createCanvas(96, 96);
   const nctx = n.getContext("2d");
   const imgData = nctx.createImageData(96, 96);
   for (let i = 0; i < imgData.data.length; i += 4) {
     const v = Math.floor(Math.random() * 255);
-    imgData.data[i] = v;
-    imgData.data[i + 1] = v;
-    imgData.data[i + 2] = v;
-    imgData.data[i + 3] = 255;
+    imgData.data[i] = v; imgData.data[i + 1] = v; imgData.data[i + 2] = v; imgData.data[i + 3] = 255;
   }
   nctx.putImageData(imgData, 0, 0);
   ctx.save();
@@ -134,7 +191,6 @@ async function drawAvatar(ctx, img, cx, cy, r) {
     const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
     ctx.drawImage(img, sx, sy, side, side, cx - r, cy - r, r * 2, r * 2);
   } else {
-    // Elegant fallback: gradient silhouette
     const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
     g.addColorStop(0, "#34354a"); g.addColorStop(1, "#1a1a24");
     ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
@@ -145,7 +201,7 @@ async function drawAvatar(ctx, img, cx, cy, r) {
   ctx.restore();
 }
 
-// ── ICONS (hairline, refined) ──────────────────────────────────────────────
+// ── ICONS ──────────────────────────────────────────────────────────────────
 function icoHeart(ctx, cx, cy, s, color, filled) {
   ctx.save();
   ctx.strokeStyle = color; ctx.fillStyle = color;
@@ -240,7 +296,7 @@ function icoReport(ctx, cx, cy, s, color) {
 const ICON_FNS    = { like: icoHeart, comment: icoComment, repost: icoRepost, share: icoShare, report: icoReport };
 const ICON_LABELS = { like: "Suka", comment: "Komentar", repost: "Teruskan", share: "Bagikan", report: "Laporkan" };
 
-// ── COLOR HELPERS ────────────────────────────────────────────────────────
+// ── COLOR HELPERS ─────────────────────────────────────────────────────────
 function hexToRgb(hex) {
   hex = hex.replace("#", "");
   if (hex.length === 3) hex = hex.split("").map(c => c + c).join("");
@@ -257,7 +313,7 @@ function lighten(hex, amt) {
   return `rgb(${l(r)},${l(g)},${l(b)})`;
 }
 
-// ── MAIN HANDLER ───────────────────────────────────────────────────────────
+// ── MAIN HANDLER ──────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -266,7 +322,7 @@ module.exports = async (req, res) => {
   try {
     let {
       avatar      = "",
-      accentColor = "#818cf8",   // indigo-400 — avatar ring + ambient glow
+      accentColor = "#818cf8",
       media       = "",
       background  = "",
       username    = "",
@@ -275,9 +331,9 @@ module.exports = async (req, res) => {
       liked       = "false",
       menu        = "like,comment,repost,share,report",
       likes       = "", comments = "", reposts = "", shares = "",
-      progress    = "2",         // active story segment (0-based)
-      segments    = "5",         // total progress segments
-      caption     = "",          // caption text over the bottom of the card
+      progress    = "2",
+      segments    = "5",
+      caption     = "",
     } = req.query || {};
 
     if (!/^#[0-9A-F]{3,8}$/i.test(accentColor)) accentColor = "#818cf8";
@@ -288,7 +344,7 @@ module.exports = async (req, res) => {
     const totalSegments = Math.max(1, parseInt(segments) || 5);
     const accentLight = lighten(accentColor, 0.35);
 
-    // ── Canvas ─────────────────────────────────────────────────────────────
+    // ── Canvas ────────────────────────────────────────────────────────────
     const W     = 420;
     const SCALE = 2;
     const CARD_H      = 560;
@@ -305,18 +361,16 @@ module.exports = async (req, res) => {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    // ── 1. Canvas background — soft, layered ambience ──────────────────────
+    // ── 1. Canvas background ──────────────────────────────────────────────
     const bgImg = await loadSafe(background);
     if (bgImg) {
       drawBlur(ctx, bgImg, 0, 0, W, H, 24);
       ctx.fillStyle = "rgba(6,6,10,0.66)";
       ctx.fillRect(0, 0, W, H);
     } else {
-      // Base: near-black, very slightly warm/cool depending on accent
       ctx.fillStyle = "#0a0a0f";
       ctx.fillRect(0, 0, W, H);
 
-      // Two soft ambient glows for depth (top-left accent, bottom-right counter-glow)
       const glow1 = ctx.createRadialGradient(W * 0.18, CARD_H * 0.15, 0, W * 0.18, CARD_H * 0.15, W * 1.1);
       glow1.addColorStop(0, rgba(accentColor, 0.16));
       glow1.addColorStop(1, "transparent");
@@ -331,13 +385,12 @@ module.exports = async (req, res) => {
     }
     drawNoise(ctx, 0, 0, W, H, 0.025);
 
-    // ── 2. Story card ──────────────────────────────────────────────────────
+    // ── 2. Story card ─────────────────────────────────────────────────────
     const CARD_X = CANVAS_PAD;
     const CARD_Y = CANVAS_PAD;
     const CARD_W = W - CANVAS_PAD * 2;
     const CARD_R = 24;
 
-    // Drop shadow — two passes for a softer, more natural falloff
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.55)";
     ctx.shadowBlur  = 60;
@@ -355,17 +408,14 @@ module.exports = async (req, res) => {
     ctx.fill();
     ctx.restore();
 
-    // Clip to card for all media
     ctx.save();
     rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
     ctx.clip();
 
-    // Media fill
     const mediaImg = await loadSafe(media);
     if (mediaImg) {
       drawCover(ctx, mediaImg, CARD_X, CARD_Y, CARD_W, CARD_H);
     } else {
-      // Placeholder: refined dark gradient, anchored to accent color
       const ph = ctx.createLinearGradient(CARD_X, CARD_Y, CARD_X + CARD_W, CARD_Y + CARD_H);
       ph.addColorStop(0,   "#15151f");
       ph.addColorStop(0.55, rgba(accentColor, 0.22));
@@ -385,14 +435,14 @@ module.exports = async (req, res) => {
       drawNoise(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 0.05);
     }
 
-    // Vignette: top fade (progress bar / mute icon readability)
+    // Vignette top
     const vigTop = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + CARD_H * 0.26);
     vigTop.addColorStop(0, "rgba(0,0,0,0.65)");
     vigTop.addColorStop(1, "transparent");
     ctx.fillStyle = vigTop;
     ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H * 0.26);
 
-    // Vignette: bottom fade (text overlay readability) — slightly taller & softer curve
+    // Vignette bottom
     const vigBot = ctx.createLinearGradient(0, CARD_Y + CARD_H * 0.46, 0, CARD_Y + CARD_H);
     vigBot.addColorStop(0,    "transparent");
     vigBot.addColorStop(0.55, "rgba(0,0,0,0.40)");
@@ -400,9 +450,9 @@ module.exports = async (req, res) => {
     ctx.fillStyle = vigBot;
     ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
 
-    ctx.restore(); // end card clip
+    ctx.restore();
 
-    // Glass edge: outer hairline + inner top highlight (gives the card a subtle "lit from above" feel)
+    // Glass edge
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.10)";
     ctx.lineWidth   = 1;
@@ -420,7 +470,7 @@ module.exports = async (req, res) => {
     ctx.fillRect(CARD_X, CARD_Y, CARD_W, 90);
     ctx.restore();
 
-    // ── 3. Progress bars (top of card) ─────────────────────────────────────
+    // ── 3. Progress bars ──────────────────────────────────────────────────
     const PB_TOP    = CARD_Y + 16;
     const PB_H      = 3;
     const PB_GAP    = 5;
@@ -431,12 +481,10 @@ module.exports = async (req, res) => {
     for (let i = 0; i < totalSegments; i++) {
       const sx = PB_SIDE + i * (segW + PB_GAP);
 
-      // Track
       ctx.fillStyle = "rgba(255,255,255,0.24)";
       rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2);
       ctx.fill();
 
-      // Fill
       if (i < activeSegment) {
         ctx.fillStyle = "#ffffff";
         rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2);
@@ -452,13 +500,12 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── 4. Avatar + username overlay (bottom of card) ──────────────────────
+    // ── 4. Avatar + username overlay ──────────────────────────────────────
     const AV_R  = 24;
     const AV_CX = CARD_X + 20 + AV_R;
     const AV_CY = CARD_Y + CARD_H - 52;
     const avatarImg = await loadSafe(avatar);
 
-    // Avatar ring — gradient ring + soft glow + thin dark gap (story-style)
     ctx.save();
     ctx.shadowColor = rgba(accentColor, 0.55);
     ctx.shadowBlur  = 16;
@@ -469,7 +516,6 @@ module.exports = async (req, res) => {
     ctx.lineWidth   = 2.5;
     ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 4, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
-    // Dark gap between ring and avatar image for separation
     ctx.save();
     ctx.strokeStyle = "rgba(10,10,14,0.55)";
     ctx.lineWidth = 2;
@@ -478,7 +524,6 @@ module.exports = async (req, res) => {
 
     await drawAvatar(ctx, avatarImg, AV_CX, AV_CY, AV_R);
 
-    // Username & handle
     if (username) {
       const maxDispLen = 22;
       const dn = username.length > maxDispLen ? username.slice(0, maxDispLen - 1) + "…" : username;
@@ -502,43 +547,49 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── 4b. Caption — clean text overlay, no box ────────────────────────────
+    // ── 4b. Caption — emoji-aware rendering ───────────────────────────────
     if (caption && caption.trim()) {
       const CAP_FONT_SZ = 15;
       const CAP_LH      = 22.5;
       const CAP_MAX_W   = CARD_W - 56;
       const CAP_X       = CARD_X + 20;
 
-      ctx.font = FN(CAP_FONT_SZ);
-      const capLines = wrapText(ctx, caption.trim(), CAP_MAX_W).slice(0, 4);
+      // Gunakan wrapTextMixed agar pengukuran lebar akurat untuk emoji
+      ctx.font = FN(CAP_FONT_SZ); // set font awal untuk fallback measure
+      const capLines = wrapTextMixed(ctx, caption.trim(), CAP_MAX_W, CAP_FONT_SZ).slice(0, 4);
       const capTotalH = capLines.length * CAP_LH;
 
       const capBaseY  = AV_CY - AV_R - 15;
       const capStartY = capBaseY - capTotalH + CAP_LH;
 
       ctx.save();
-      ctx.font         = FN(CAP_FONT_SZ);
       ctx.textAlign    = "left";
       ctx.textBaseline = "alphabetic";
-      ctx.fillStyle    = "rgba(255,255,255,0.96)";
 
       for (let i = 0; i < capLines.length; i++) {
         const ly = capStartY + i * CAP_LH;
+        ctx.save();
         ctx.shadowColor   = "rgba(0,0,0,0.80)";
         ctx.shadowBlur    = 14;
         ctx.shadowOffsetY = 1;
-        ctx.fillText(capLines[i], CAP_X, ly);
-        ctx.shadowBlur    = 4;
-        ctx.fillText(capLines[i], CAP_X, ly);
+        // Pass pertama: shadow tebal
+        drawTextWithEmoji(ctx, capLines[i], CAP_X, ly, CAP_FONT_SZ, "rgba(255,255,255,0.96)");
+        ctx.shadowBlur = 4;
+        // Pass kedua: shadow halus (double-render untuk text shadow yang tajam)
+        drawTextWithEmoji(ctx, capLines[i], CAP_X, ly, CAP_FONT_SZ, "rgba(255,255,255,0.96)");
+        ctx.restore();
       }
       ctx.shadowColor = "transparent";
       ctx.restore();
     }
 
-    // Mute icon — glass pill, top-right
-    const MUTE_R = 17;
+    // ── Mute icon — dipindah lebih ke bawah agar tidak tabrakan progress bar
+    // Dulu: CARD_Y + 14 + MUTE_R  → terlalu dekat progress bar (PB_TOP = CARD_Y+16)
+    // Sekarang: CARD_Y + 44 + MUTE_R  → berada di bawah progress bar dengan cukup jarak
+    const MUTE_R  = 17;
     const MUTE_CX = CARD_X + CARD_W - 14 - MUTE_R;
-    const MUTE_CY = CARD_Y + 14 + MUTE_R;
+    const MUTE_CY = CARD_Y + 44 + MUTE_R;   // ← FIX: dari 14 → 44
+
     ctx.save();
     ctx.fillStyle = "rgba(20,20,28,0.42)";
     ctx.strokeStyle = "rgba(255,255,255,0.14)";
@@ -555,7 +606,7 @@ module.exports = async (req, res) => {
     ctx.beginPath(); ctx.moveTo(mx + 14, my - 4); ctx.lineTo(mx + 9, my + 4); ctx.stroke();
     ctx.restore();
 
-    // ── 5. Action menu — floating glass panel ──────────────────────────────
+    // ── 5. Action menu ────────────────────────────────────────────────────
     if (menuKeys.length > 0) {
       const MENU_X = CARD_X;
       const MENU_W = CARD_W;
@@ -566,7 +617,6 @@ module.exports = async (req, res) => {
       const COUNT_SIZE = 13;
       const ICON_CX = MENU_X + 24 + ICON_S;
 
-      // Glass panel base
       ctx.save();
       ctx.fillStyle = "rgba(16,16,23,0.90)";
       ctx.shadowColor = "rgba(0,0,0,0.55)";
@@ -576,7 +626,6 @@ module.exports = async (req, res) => {
       ctx.fill();
       ctx.restore();
 
-      // Subtle top sheen across the whole panel (clipped)
       ctx.save();
       rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R);
       ctx.clip();
@@ -586,7 +635,6 @@ module.exports = async (req, res) => {
       ctx.fillStyle = sheen;
       ctx.fillRect(MENU_X, MENU_Y, MENU_W, 40);
 
-      // Active "like" row tint, drawn inside the same clip so corners stay clean
       const likeIdx = menuKeys.indexOf("like");
       if (likeIdx !== -1 && isLiked) {
         const rowY = MENU_Y + MENU_PAD_Y + likeIdx * MENU_ROW_H;
@@ -595,7 +643,6 @@ module.exports = async (req, res) => {
       }
       ctx.restore();
 
-      // Glass border
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,0.08)";
       ctx.lineWidth = 1;
