@@ -39,18 +39,48 @@ function rrTail(ctx, x, y, w, h, tl, tr, br, bl) {
   ctx.closePath();
 }
 
+/**
+ * Wrap text into lines respecting maxW.
+ * Handles \n (literal) and real newlines.
+ * Also handles very long single words by character-level breaking.
+ */
 function wrapText(ctx, text, maxW) {
   const out = [];
+
   for (const hard of String(text).replace(/\\n/g, "\n").split("\n")) {
     const words = hard.split(" ");
     let cur = "";
-    for (const w of words) {
-      const test = cur ? cur + " " + w : w;
-      if (ctx.measureText(test).width > maxW && cur) { out.push(cur); cur = w; }
-      else cur = test;
+
+    for (const word of words) {
+      // Handle case where a single word is wider than maxW (force char-break)
+      if (ctx.measureText(word).width > maxW) {
+        if (cur) { out.push(cur); cur = ""; }
+        let part = "";
+        for (const ch of word) {
+          const test = part + ch;
+          if (ctx.measureText(test).width > maxW && part) {
+            out.push(part);
+            part = ch;
+          } else {
+            part = test;
+          }
+        }
+        cur = part;
+        continue;
+      }
+
+      const test = cur ? cur + " " + word : word;
+      if (ctx.measureText(test).width > maxW && cur) {
+        out.push(cur);
+        cur = word;
+      } else {
+        cur = test;
+      }
     }
+
     out.push(cur);
   }
+
   return out;
 }
 
@@ -191,13 +221,14 @@ async function handleTTQC(req, res) {
     shadow:   dark ? "rgba(0,0,0,0.55)" : "rgba(80,80,120,0.10)",
   };
 
-  // ── CANVAS SIZE ───────────────────────────────────────────
+  // ── CONSTANTS ─────────────────────────────────────────────
   const W     = 360;
   const SCALE = 2;
   const FS    = 15;
-  const LH    = 23;
+  const LH    = 23;       // line height per baris teks
   const AVR   = 18;
-  const BPX   = 12; const BPY = 9;
+  const BPX   = 14;       // horizontal padding dalam bubble
+  const BPY   = 11;       // vertical padding dalam bubble (atas & bawah)
 
   // Menu items
   const menuItems = [
@@ -213,47 +244,57 @@ async function handleTTQC(req, res) {
   const ICO_GAP = 10;
   const M_PADX  = 16;
 
-  // X start — sejajar kiri semua elemen
+  // X start — kiri semua elemen (bubble, pill, menu) sejajar
   const BX_START = 14 + AVR*2 + 8;
 
-  // Hitung lebar menu minimum (dari label terpanjang)
+  // ── PRE-MEASURE: hitung lebar menu ────────────────────────
   const tmpM = createCanvas(800, 10);
   const tcM  = tmpM.getContext("2d");
   tcM.font   = CF(menuFontSize);
-  const maxLabelW  = menuItems.reduce((m, it) => Math.max(m, tcM.measureText(it.label).width), 0);
-  const MW_MIN     = Math.ceil(M_PADX + ICO_W + ICO_GAP + maxLabelW + M_PADX);
+  const maxLabelW = menuItems.reduce((m, it) => Math.max(m, tcM.measureText(it.label).width), 0);
+  const MW_MIN    = Math.ceil(M_PADX + ICO_W + ICO_GAP + maxLabelW + M_PADX);
 
-  // Hitung bubble — max width = sisa canvas dari BX_START
-  const BMAX  = W - BX_START - 14;
+  // ── PRE-MEASURE: wrap teks & hitung dimensi bubble ────────
+  const BMAX  = W - BX_START - 14;   // max lebar bubble
   const tmp   = createCanvas(W * 2, 10);
   const tc    = tmp.getContext("2d");
   tc.font     = CF(FS);
-  const lines = wrapText(tc, message, BMAX - BPX*2);
-  const textW = lines.reduce((m, l) => Math.max(m, tc.measureText(l).width), 0);
-  // bubble width: cukup untuk teks, tapi minimal sama dengan menu
-  const bW    = Math.min(BMAX, Math.max(textW + BPX*2, MW_MIN, 90));
-  const bH    = BPY + lines.length * LH + BPY;
 
-  // Menu width ikut bubble width (agar sejajar rapi)
+  // Hitung text wrap area: bubble padding kiri + kanan
+  const textMaxW = BMAX - BPX * 2;
+  const lines    = wrapText(tc, message, textMaxW);
+  const lineCount = lines.length;
+
+  // Lebar bubble: sesuaikan dengan teks terpanjang, minimal menu/min width
+  const maxLineW = lines.reduce((m, l) => Math.max(m, tc.measureText(l).width), 0);
+  const bW = Math.min(BMAX, Math.max(maxLineW + BPX * 2, MW_MIN, 90));
+
+  // Tinggi bubble: padding atas + (baris × line-height) + padding bawah
+  // Untuk satu baris pakai sedikit lebih padat, multi-baris tambah spacing
+  const bH = BPY + lineCount * LH + BPY;
+
+  // Menu width sama persis dengan bubble width supaya sejajar rapi
   const MW = bW;
 
-  // Heights — semua compact
+  // ── SECTION HEIGHTS ───────────────────────────────────────
   const H_HDR   = 56;
   const H_GHOST = 132;
   const H_PILL  = 56;
-  const H_BUB   = bH + 8;          // bubble + sedikit padding
-  const H_TIME  = 20;              // timestamp rapat
+  const H_BUB   = bH + 8;      // bubble + padding bawah kecil
+  const H_TIME  = 22;           // baris timestamp
   const ITEM_H  = 46;
-  const H_MENU  = ITEM_H * 6;
+  const H_MENU  = ITEM_H * menuItems.length;
   const H_INPUT = 56;
   const GAP     = 8;
 
+  // Total tinggi canvas — bersifat dinamis karena bH bisa besar
   const H = H_HDR + H_GHOST + GAP + H_PILL + GAP + H_BUB + H_TIME + GAP + H_MENU + GAP + H_INPUT;
 
   const canvas = createCanvas(W * SCALE, H * SCALE);
   const ctx    = canvas.getContext("2d");
   ctx.scale(SCALE, SCALE);
 
+  // Background
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, W, H);
 
@@ -266,15 +307,11 @@ async function handleTTQC(req, res) {
   ctx.fillRect(0, H_HDR - 1, W, 1);
 
   const hMid = H_HDR / 2;
-
-  // Back arrow — beri ruang 14px dari kiri
   icoBack(ctx, 14, hMid, C.name);
 
-  // Avatar — 30px dari kiri (setelah arrow ~22px + gap 8px)
   const avHX = 36;
   await drawAvatar(ctx, avatar, avHX + AVR, hMid, AVR);
 
-  // Name + online
   const TX = avHX + AVR*2 + 10;
   const dn = name.length > 20 ? name.slice(0, 19) + "…" : name;
 
@@ -286,16 +323,13 @@ async function handleTTQC(req, res) {
   ctx.fillStyle = C.sub;
   ctx.fillText("online", TX, hMid + 12);
 
-  // Verified badge — sejajar center teks nama
   if (verified) {
     ctx.font = BF(14);
     const nw = ctx.measureText(dn).width;
     icoVerified(ctx, TX + nw + 10, hMid - 5);
   }
 
-  // More dots
   icoMore(ctx, W - 16, hMid, C.icon);
-
   Y += H_HDR;
 
   // ── 2. GHOST BUBBLES ──────────────────────────────────────
@@ -333,7 +367,7 @@ async function handleTTQC(req, res) {
   const E_PAD  = 12;
   const PH     = 44;
   const PW     = emojis.length * E_SZ + (emojis.length - 1) * E_GAP + E_PAD * 2;
-  const PX     = BX_START; // sejajar kiri bubble & menu
+  const PX     = BX_START;
   const PY     = Y + 6;
 
   ctx.save();
@@ -350,7 +384,7 @@ async function handleTTQC(req, res) {
   ctx.textAlign = "left";
   Y += H_PILL;
 
-  // ── 4. BUBBLE ─────────────────────────────────────────────
+  // ── 4. BUBBLE (auto-wrap) ──────────────────────────────────
   Y += GAP;
   const avBX = 14 + AVR;
   const avBY = Y + AVR + 4;
@@ -365,20 +399,24 @@ async function handleTTQC(req, res) {
   ctx.shadowBlur    = 16;
   ctx.shadowOffsetY = 3;
   ctx.fillStyle = C.bubble;
-  rrTail(ctx, bXX, bYY, bW, bH, 4, 16, 16, 16); ctx.fill();
+  rrTail(ctx, bXX, bYY, bW, bH, 4, 16, 16, 16);
+  ctx.fill();
   ctx.restore();
 
-  // Text
-  ctx.font = CF(FS); ctx.fillStyle = C.msg;
-  let ty = bYY + BPY + FS - 1;
-  for (const line of lines) { ctx.fillText(line, bXX + BPX, ty); ty += LH; }
+  // Render setiap baris teks dengan line-height yang konsisten
+  ctx.font = CF(FS);
+  ctx.fillStyle = C.msg;
+  const textStartY = bYY + BPY + FS - 2;
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], bXX + BPX, textStartY + i * LH);
+  }
 
   Y += H_BUB;
 
-  // ── 5. TIMESTAMP — rapat langsung di bawah bubble ─────────
-  // Tambahkan di dalam area H_BUB tidak perlu, kita render di Y tepat
-  ctx.font = CF(11); ctx.fillStyle = C.sub;
-  ctx.fillText(time, bXX + 2, Y + 13);
+  // ── 5. TIMESTAMP ──────────────────────────────────────────
+  ctx.font = CF(11);
+  ctx.fillStyle = C.sub;
+  ctx.fillText(time, bXX + 2, Y + 14);
   Y += H_TIME;
 
   // ── 6. CONTEXT MENU ───────────────────────────────────────
