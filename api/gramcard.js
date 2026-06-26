@@ -43,6 +43,16 @@ function fmt(n) {
   return String(n);
 }
 
+// hex (#rgb or #rrggbb) → "r,g,b" for building rgba() strings
+function hexToRgbStr(hex) {
+  let h = hex.replace("#", "");
+  if (h.length === 3) h = h.split("").map(c => c + c).join("");
+  const r = parseInt(h.substring(0, 2), 16) || 0;
+  const g = parseInt(h.substring(2, 4), 16) || 0;
+  const b = parseInt(h.substring(4, 6), 16) || 0;
+  return `${r},${g},${b}`;
+}
+
 async function drawRoundAvatar(ctx, avatarUrl, cx, cy, r) {
   ctx.save();
   ctx.beginPath();
@@ -116,27 +126,72 @@ function drawVerifiedBadge(ctx, cx, cy, r) {
   ctx.restore();
 }
 
-// ── ICONS ──────────────────────────────────────────────────────
-function iconComment(ctx, cx, cy, s, color) {
-  ctx.save();
-  ctx.lineWidth = s * 0.14; ctx.lineJoin = "round"; ctx.lineCap = "round";
+// ── ICONS (iOS-style: unified stroke weight, rounded caps/joins) ─
+// Semua icon dibangun dalam bounding box yang sama relatif ke `s`
+// supaya "visual weight" konsisten satu sama lain (ala SF Symbols).
+const STROKE_RATIO = 0.135; // rasio lineWidth/`s` yang dipakai SEMUA icon
+
+function setStroke(ctx, s, color) {
+  ctx.lineWidth   = s * STROKE_RATIO;
+  ctx.lineJoin    = "round";
+  ctx.lineCap     = "round";
   ctx.strokeStyle = color;
-  const w = s * 1.7, h = s * 1.3;
-  const x = cx - w / 2, y = cy - h / 2 - s * 0.08;
-  rr(ctx, x, y, w, h, s * 0.45, false, true);
+}
+
+// ❤️ Like — heart vector, jadi nyatu dengan icon lain (bisa diwarnai)
+function iconLike(ctx, cx, cy, s, color, active) {
+  ctx.save();
+  ctx.fillStyle = active ? "#ef4444" : "transparent";
+  setStroke(ctx, s, active ? "#ef4444" : color);
+
+  const w = s * 1.9, top = cy - s * 0.55;
   ctx.beginPath();
-  ctx.moveTo(cx - s*0.45, y + h);
-  ctx.lineTo(cx - s*0.65, y + h + s*0.45);
-  ctx.lineTo(cx + s*0.05, y + h);
+  ctx.moveTo(cx, top + s * 0.32);
+  ctx.bezierCurveTo(
+    cx - w * 0.18, top - s * 0.28,
+    cx - w * 0.52, top - s * 0.05,
+    cx - w * 0.52, top + s * 0.42
+  );
+  ctx.bezierCurveTo(
+    cx - w * 0.52, top + s * 0.82,
+    cx - w * 0.18, top + s * 1.05,
+    cx, top + s * 1.45
+  );
+  ctx.bezierCurveTo(
+    cx + w * 0.18, top + s * 1.05,
+    cx + w * 0.52, top + s * 0.82,
+    cx + w * 0.52, top + s * 0.42
+  );
+  ctx.bezierCurveTo(
+    cx + w * 0.52, top - s * 0.05,
+    cx + w * 0.18, top - s * 0.28,
+    cx, top + s * 0.32
+  );
   ctx.closePath();
-  ctx.fillStyle = color; ctx.fill();
+  if (active) ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 
+// 💬 Comment — rounded speech bubble with tail
+function iconComment(ctx, cx, cy, s, color) {
+  ctx.save();
+  setStroke(ctx, s, color);
+  const w = s * 1.7, h = s * 1.25;
+  const x = cx - w / 2, y = cy - h / 2 - s * 0.08;
+  rr(ctx, x, y, w, h, s * 0.42, false, true);
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.5, y + h);
+  ctx.lineTo(cx - s * 0.68, y + h + s * 0.42);
+  ctx.lineTo(cx - s * 0.1, y + h);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// 🔁 Repost — two-arrow loop, same stroke weight as the rest
 function iconRepost(ctx, cx, cy, s, color) {
   ctx.save();
-  ctx.lineWidth = s * 0.16; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.strokeStyle = color;
+  setStroke(ctx, s, color);
   const w = s * 1.5, h = s * 1.1;
   ctx.beginPath();
   ctx.moveTo(cx - w/2, cy + h*0.1);
@@ -161,49 +216,45 @@ function iconRepost(ctx, cx, cy, s, color) {
   ctx.restore();
 }
 
+// ↗️ Share — clean outward arrow (iOS "share" glyph style)
 function iconShare(ctx, cx, cy, s, color) {
   ctx.save();
-  ctx.lineWidth = s * 0.15; ctx.lineJoin = "round"; ctx.lineCap = "round";
-  ctx.strokeStyle = color;
+  setStroke(ctx, s, color);
   ctx.beginPath();
-  ctx.moveTo(cx - s*0.85, cy - s*0.6);
-  ctx.lineTo(cx + s*0.85, cy);
-  ctx.lineTo(cx - s*0.85, cy + s*0.6);
-  ctx.lineTo(cx - s*0.35, cy);
+  ctx.moveTo(cx - s*0.8, cy - s*0.55);
+  ctx.lineTo(cx + s*0.8, cy);
+  ctx.lineTo(cx - s*0.8, cy + s*0.55);
+  ctx.lineTo(cx - s*0.32, cy);
   ctx.closePath();
   ctx.stroke();
   ctx.restore();
 }
 
+// 🚩 Report — flag glyph (clearer affordance than a bare exclamation)
 function iconReport(ctx, cx, cy, s, color) {
   ctx.save();
-  ctx.lineWidth = s * 0.16; ctx.lineJoin = "round"; ctx.lineCap = "round";
-  ctx.strokeStyle = color; ctx.fillStyle = color;
-  const r = s * 0.9;
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - r*0.45);
-  ctx.lineTo(cx, cy + r*0.12);
-  ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx, cy + r*0.45, s*0.09, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-}
+  setStroke(ctx, s, color);
+  const poleX = cx - s * 0.55;
+  const top = cy - s * 0.85, bottom = cy + s * 0.85;
 
-// ── Like icon: emoji ❤️ merah (atau fallback heart merah) ──────
-function iconLike(ctx, cx, cy, s, active) {
-  // Selalu tampil merah seperti emoji love
-  ctx.save();
-  ctx.font = FE(Math.round(s * 2.2));
-  ctx.textAlign    = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("❤️", cx, cy + s * 0.05);
-  ctx.textAlign    = "start";
-  ctx.textBaseline = "alphabetic";
+  // pole
+  ctx.beginPath();
+  ctx.moveTo(poleX, top);
+  ctx.lineTo(poleX, bottom);
+  ctx.stroke();
+
+  // flag flap
+  ctx.beginPath();
+  ctx.moveTo(poleX, top + s * 0.05);
+  ctx.lineTo(poleX + s * 1.15, top + s * 0.4);
+  ctx.lineTo(poleX, top + s * 0.75);
+  ctx.closePath();
+  ctx.stroke();
   ctx.restore();
 }
 
 const ICONS = {
-  like:    (ctx, x, y, s, c, active) => iconLike(ctx, x, y, s, active),
+  like:    (ctx, x, y, s, c, active) => iconLike(ctx, x, y, s, c, active),
   comment: (ctx, x, y, s, c) => iconComment(ctx, x, y, s, c),
   repost:  (ctx, x, y, s, c) => iconRepost(ctx, x, y, s, c),
   share:   (ctx, x, y, s, c) => iconShare(ctx, x, y, s, c),
@@ -252,7 +303,6 @@ module.exports = async (req, res) => {
 
     const BG_DARK    = "#0a0a0d";
     const CARD_BG    = "#101014";
-    const MENU_BG    = "rgba(28,28,34,0.94)";
     const TEXT_WHITE = "#f5f5f7";
     const DANGER     = "#ef4444";
 
@@ -276,6 +326,22 @@ module.exports = async (req, res) => {
       ctx.fillRect(0, 0, W, H);
     }
 
+    // Ambient accent glow — ties the whole frame to avatarColor so each
+    // render feels branded rather than a generic dark backdrop.
+    const accentRgb = hexToRgbStr(avatarColor);
+    ctx.save();
+    const glow1 = ctx.createRadialGradient(W * 0.12, H * 0.05, 0, W * 0.12, H * 0.05, W * 0.75);
+    glow1.addColorStop(0, `rgba(${accentRgb},0.16)`);
+    glow1.addColorStop(1, `rgba(${accentRgb},0)`);
+    ctx.fillStyle = glow1;
+    ctx.fillRect(0, 0, W, H);
+    const glow2 = ctx.createRadialGradient(W * 0.92, H * 0.95, 0, W * 0.92, H * 0.95, W * 0.7);
+    glow2.addColorStop(0, `rgba(${accentRgb},0.10)`);
+    glow2.addColorStop(1, `rgba(${accentRgb},0)`);
+    ctx.fillStyle = glow2;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+
     // ── Story card ──────────────────────────────────────────
     const PAD    = Math.round(W * 0.033);
     const cX = PAD, cY = PAD;
@@ -287,11 +353,25 @@ module.exports = async (req, res) => {
     const RADIUS = Math.round(cW * 0.032);
 
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur  = 30;
-    ctx.shadowOffsetY = 10;
-    ctx.fillStyle = CARD_BG;
+    ctx.shadowColor = "rgba(0,0,0,0.55)";
+    ctx.shadowBlur  = 44;
+    ctx.shadowOffsetY = 18;
+    const cardGrad = ctx.createLinearGradient(cX, cY, cX, cY + cH);
+    cardGrad.addColorStop(0, "#17171f");
+    cardGrad.addColorStop(1, "#0e0e13");
+    ctx.fillStyle = cardGrad;
     rr(ctx, cX, cY, cW, cH, RADIUS, true, false);
+    ctx.restore();
+
+    // Hairline highlight along the top edge — reads as a glass/premium bevel
+    ctx.save();
+    rr(ctx, cX, cY, cW, cH, RADIUS, false, false);
+    ctx.clip();
+    const bevel = ctx.createLinearGradient(0, cY, 0, cY + Math.round(cH * 0.04));
+    bevel.addColorStop(0, "rgba(255,255,255,0.16)");
+    bevel.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = bevel;
+    ctx.fillRect(cX, cY, cW, Math.round(cH * 0.04));
     ctx.restore();
 
     ctx.save();
@@ -334,12 +414,18 @@ module.exports = async (req, res) => {
     const AV_CX = cX + AV_R + Math.round(HEAD_H * 0.30);
     const AV_CY = cY + Math.round(HEAD_H * 0.50);
 
-    // Ring glowing
+    // Signature ring — gradient sweep (not flat) plus a soft ambient halo,
+    // so the avatar reads as the one "alive" element on the card.
     ctx.save();
-    ctx.strokeStyle = avatarColor;
-    ctx.lineWidth = Math.max(3, Math.round(AV_R * 0.09));
-    ctx.shadowColor = avatarColor + "99";
-    ctx.shadowBlur  = 14;
+    ctx.shadowColor = avatarColor + "aa";
+    ctx.shadowBlur  = 22;
+    const ringGrad = ctx.createLinearGradient(
+      AV_CX - AV_R, AV_CY - AV_R, AV_CX + AV_R, AV_CY + AV_R
+    );
+    ringGrad.addColorStop(0, avatarColor);
+    ringGrad.addColorStop(1, "#ffffff");
+    ctx.strokeStyle = ringGrad;
+    ctx.lineWidth = Math.max(3, Math.round(AV_R * 0.1));
     ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 5, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
 
@@ -355,10 +441,15 @@ module.exports = async (req, res) => {
       ctx.font = F(FONT_NAME);
       ctx.fillStyle    = TEXT_WHITE;
       ctx.textBaseline = "middle";
+      ctx.shadowColor  = "rgba(0,0,0,0.4)";
+      ctx.shadowBlur   = 6;
+      ctx.shadowOffsetY = 1;
 
       // Ukur lebar teks untuk posisi badge
       const tw = ctx.measureText(dispName).width;
       ctx.fillText(dispName, textX, textY);
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
 
       if (isVerified) {
         const BADGE_R = Math.round(FONT_NAME * 0.52);
@@ -381,7 +472,7 @@ module.exports = async (req, res) => {
     rr(ctx, cX, cY, cW, cH, RADIUS, false, true);
     ctx.restore();
 
-    // ── Action menu ───────────────────────────────────────
+    // ── Action menu (frosted glass, iOS-style) ─────────────
     if (menuItems.length) {
       const ROW_H  = Math.round(H * 0.062);
       const ICON_S = Math.round(ROW_H * 0.30);
@@ -392,47 +483,100 @@ module.exports = async (req, res) => {
       const menuH  = MPAD_Y * 2 + menuItems.length * ROW_H;
       const menuX  = cX;
       const menuY  = cY + cH + Math.round(H * 0.028);
+      const menuR  = 24;
+
+      // Drop shadow, separate layer so it isn't clipped with the glass fill
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur  = 32;
+      ctx.shadowOffsetY = 12;
+      ctx.fillStyle = "rgba(0,0,0,0.01)"; // shadow-caster only
+      rr(ctx, menuX, menuY, menuW, menuH, menuR, true, false);
+      ctx.restore();
+
+      // Frosted glass body: vertical gradient + translucent border + a
+      // soft accent tint pulled from avatarColor so it echoes the avatar.
+      ctx.save();
+      rr(ctx, menuX, menuY, menuW, menuH, menuR, false, false);
+      ctx.clip();
+      const glassGrad = ctx.createLinearGradient(menuX, menuY, menuX, menuY + menuH);
+      glassGrad.addColorStop(0, "rgba(40,40,48,0.82)");
+      glassGrad.addColorStop(1, "rgba(22,22,28,0.88)");
+      ctx.fillStyle = glassGrad;
+      ctx.fillRect(menuX, menuY, menuW, menuH);
+      const accentTint = ctx.createLinearGradient(menuX, menuY, menuX + menuW, menuY);
+      accentTint.addColorStop(0, `rgba(${accentRgb},0.10)`);
+      accentTint.addColorStop(1, `rgba(${accentRgb},0)`);
+      ctx.fillStyle = accentTint;
+      ctx.fillRect(menuX, menuY, menuW, menuH);
+      // top hairline highlight, like the main card bevel
+      const menuBevel = ctx.createLinearGradient(0, menuY, 0, menuY + Math.round(menuH * 0.06));
+      menuBevel.addColorStop(0, "rgba(255,255,255,0.14)");
+      menuBevel.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = menuBevel;
+      ctx.fillRect(menuX, menuY, menuW, Math.round(menuH * 0.06));
+      ctx.restore();
 
       ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.5)";
-      ctx.shadowBlur  = 26;
-      ctx.shadowOffsetY = 8;
-      ctx.fillStyle = MENU_BG;
-      rr(ctx, menuX, menuY, menuW, menuH, 22, true, false);
+      ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      ctx.lineWidth = 1.5;
+      rr(ctx, menuX, menuY, menuW, menuH, menuR, false, true);
       ctx.restore();
 
       let iy = menuY + MPAD_Y;
-      for (const key of menuItems) {
+      menuItems.forEach((key, idx) => {
         const isReport = key === "report";
         const isLike   = key === "like";
-        const color = isReport ? DANGER : TEXT_WHITE;
+        const likeActive = isLike && isLiked;
+        const color = isReport ? DANGER : (likeActive ? "#ef4444" : TEXT_WHITE);
         const rowCY  = iy + ROW_H / 2;
         const iconCX = menuX + MPAD_X + ICON_S * 0.55;
 
-        ICONS[key](ctx, iconCX, rowCY, ICON_S, color, key === "like" && isLiked);
+        ICONS[key](ctx, iconCX, rowCY, ICON_S, color, likeActive);
 
-        // Label teks: Like tampil merah jika active, else putih
-        let label = LABELS[key];
+        const label = LABELS[key];
         const cnt = counts[key];
-        if (cnt !== "" && cnt !== undefined && cnt !== null && !isNaN(parseInt(cnt))) {
-          label += "  " + fmt(parseInt(cnt));
-        }
+        const hasCount = cnt !== "" && cnt !== undefined && cnt !== null && !isNaN(parseInt(cnt));
 
-        const labelColor = isLike ? "#ef4444" : color;
         ctx.font = F(FONT_S);
-        ctx.fillStyle    = labelColor;
+        ctx.fillStyle    = color;
         ctx.textBaseline = "middle";
         ctx.fillText(label, iconCX + ICON_S * 1.55, rowCY);
+
+        if (hasCount) {
+          const labelW = ctx.measureText(label).width;
+          ctx.font = F(Math.round(FONT_S * 0.92), false);
+          ctx.fillStyle = isReport
+            ? "rgba(239,68,68,0.65)"
+            : (likeActive ? "rgba(239,68,68,0.75)" : "rgba(245,245,247,0.5)");
+          ctx.fillText(
+            fmt(parseInt(cnt)),
+            iconCX + ICON_S * 1.55 + labelW + FONT_S * 0.45,
+            rowCY
+          );
+        }
         ctx.textBaseline = "alphabetic";
 
+        // Separator tipis ala iOS context menu (skip baris terakhir)
+        if (idx < menuItems.length - 1) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(255,255,255,0.10)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(menuX + Math.round(menuW * 0.06), iy + ROW_H);
+          ctx.lineTo(menuX + menuW - Math.round(menuW * 0.06), iy + ROW_H);
+          ctx.stroke();
+          ctx.restore();
+        }
+
         iy += ROW_H;
-      }
+      });
     }
 
     res.setHeader("Content-Type", "image/png");
     res.send(canvas.toBuffer("image/png"));
   } catch (err) {
     console.error(err);
-    res.send(canvas.toBuffer("image/png"));
+    res.status(500).json({ error: err.message });
   }
 };
