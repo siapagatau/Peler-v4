@@ -16,7 +16,6 @@ const ef = (sz) => `${sz}px ${hasEmojiFont ? "NotoColorEmoji,sans-serif" : "sans
 const cf = (sz) => `${sz}px ${hasEmojiFont ? "Inter,NotoColorEmoji,sans-serif" : "Inter,sans-serif"}`;
 const bf = (sz) => `bold ${sz}px ${hasEmojiFont ? "InterBold,NotoColorEmoji,sans-serif" : "InterBold,sans-serif"}`;
 
-// Rounded rect — all corners same radius
 function rr(ctx, x, y, w, h, r, fill, stroke) {
   r = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
@@ -30,7 +29,6 @@ function rr(ctx, x, y, w, h, r, fill, stroke) {
   if (stroke) ctx.stroke();
 }
 
-// Rounded rect — custom per-corner radii (tl, tr, br, bl)
 function rrC(ctx, x, y, w, h, tl, tr, br, bl) {
   ctx.beginPath();
   ctx.moveTo(x + tl, y);
@@ -75,8 +73,14 @@ async function drawAvatar(ctx, url, cx, cy, r) {
 
 async function handleTTQC(req, res) {
   const {
-    name = "User", message = "Halo!", avatar = "", theme = "light",
-    verified = "false", likes = "", pinned = "false", time = "now",
+    name = "KaaOffc",
+    message = "miku bot anti redup",
+    avatar = "",
+    theme = "light",
+    verified = "false",
+    likes = "",
+    pinned = "false",
+    time = "now",
   } = req.query;
 
   const dark = theme === "dark";
@@ -101,7 +105,6 @@ async function handleTTQC(req, res) {
     streakBg:  dark ? "#2a2a2a" : "#e8e8f0",
   };
 
-  // ── measure message ──────────────────────────────────────────
   const W       = 400;
   const FS      = 17;
   const LH      = 26;
@@ -119,19 +122,20 @@ async function handleTTQC(req, res) {
   const bW    = Math.min(BMAX, Math.max(textW + BPX * 2, 90));
   const bH    = BPY + lines.length * LH + BPY;
 
-  // ── section heights (matched from screenshot) ────────────────
+  // ── section heights ────────────────────────────────
   const H_HDR    = 62;
-  const H_GHOST  = 160;   // 3 ghost rows
-  const H_REACT  = 64;    // emoji pill
+  const H_GHOST  = 0;               // ghost chat dihilangkan
+  const H_REACT  = 0;               // reaksi dipindah ke bawah
   const H_BUBBLE = Math.max(bH + 18, 62);
+  const H_REACT_BOTTOM = 48;        // tinggi baris reaksi di bawah bubble
   const H_TIME   = 30;
   const ITEM_H   = 52;
   const N_ITEMS  = 6;
-  const H_MENU   = N_ITEMS * ITEM_H + 2;  // +2 for top/bottom breathing room
-  const H_STREAK = 52;    // streak pet + play button row (no emoji shortcuts)
+  const H_MENU   = N_ITEMS * ITEM_H + 2;
+  const H_STREAK = 52;
   const H_INPUT  = 62;
 
-  const H = H_HDR + H_GHOST + H_REACT + H_BUBBLE + H_TIME + H_MENU + 10 + H_STREAK + H_INPUT;
+  const H = H_HDR + H_GHOST + H_REACT + H_BUBBLE + H_REACT_BOTTOM + H_TIME + H_MENU + 10 + H_STREAK + H_INPUT;
 
   const canvas = createCanvas(W, H);
   const ctx    = canvas.getContext("2d");
@@ -173,7 +177,6 @@ async function handleTTQC(req, res) {
     ctx.restore();
   }
 
-  // ⋮ dots
   ctx.fillStyle = C.icon;
   [Y + H_HDR / 2 - 8, Y + H_HDR / 2, Y + H_HDR / 2 + 8].forEach(dy => {
     ctx.beginPath(); ctx.arc(W - 20, dy, 2.2, 0, Math.PI * 2); ctx.fill();
@@ -183,83 +186,14 @@ async function handleTTQC(req, res) {
   Y += H_HDR;
 
   // ════════════════════════════════════════════════════
-  // 2. GHOST CHAT AREA  (3 rows matching screenshot)
-  // row structure from screenshot:
-  //   row A: avatar left + short recv bubble | long sent bubble right
-  //   row B: avatar left + medium recv bubble | medium sent bubble right
-  //   row C: avatar left + short recv bubble  | (nothing right, partial)
+  // 2. GHOST CHAT (dihilangkan)
   // ════════════════════════════════════════════════════
-  const ROW_H   = Math.floor(H_GHOST / 3);   // ~53px per row
-  const AVT_GR  = 18;   // ghost avatar radius
-
-  const ghostRows = [
-    { recvW: 140, sentW: 120, sentRight: true },
-    { recvW: 170, sentW:  90, sentRight: true },
-    { recvW: 110, sentW:   0, sentRight: false },
-  ];
-
-  for (let ri = 0; ri < ghostRows.length; ri++) {
-    const row  = ghostRows[ri];
-    const rowY = Y + ri * ROW_H + 8;
-    const bubY = rowY + AVT_GR - 13;   // vertically center bubble with avatar
-    const bH_g = 28;
-
-    // avatar circle
-    ctx.save();
-    ctx.globalAlpha = 0.45;
-    ctx.fillStyle   = C.ghostAvt;
-    ctx.beginPath(); ctx.arc(12 + AVT_GR, rowY + AVT_GR, AVT_GR, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-
-    // recv bubble
-    ctx.save();
-    ctx.globalAlpha = 0.45;
-    ctx.fillStyle   = C.ghostRecv;
-    rr(ctx, 12 + AVT_GR * 2 + 8, bubY, row.recvW, bH_g, 14, true, false);
-    ctx.restore();
-
-    // sent bubble (right aligned)
-    if (row.sentW > 0) {
-      ctx.save();
-      ctx.globalAlpha = 0.45;
-      ctx.fillStyle   = C.ghostSent;
-      rr(ctx, W - row.sentW - 14, bubY, row.sentW, bH_g, 14, true, false);
-      ctx.restore();
-    }
-  }
-
-  // fade out bottom of ghost area
-  const gFade = ctx.createLinearGradient(0, Y + H_GHOST * 0.45, 0, Y + H_GHOST);
-  gFade.addColorStop(0, dark ? "rgba(17,17,17,0)"   : "rgba(237,237,242,0)");
-  gFade.addColorStop(1, dark ? "rgba(17,17,17,0.92)" : "rgba(237,237,242,0.92)");
-  ctx.fillStyle = gFade;
-  ctx.fillRect(0, Y, W, H_GHOST);
+  // tidak ada ghost chat
 
   Y += H_GHOST;
 
   // ════════════════════════════════════════════════════
-  // 3. EMOJI REACTION PILL
-  // ════════════════════════════════════════════════════
-  const PX = 16, PW = W - 32, PH = 50, PY = Y + 7;
-
-  ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.10)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3;
-  ctx.fillStyle = C.pillBg;
-  rr(ctx, PX, PY, PW, PH, 26, true, false);
-  ctx.restore();
-
-  const emojis = ["❤️", "😂", "😭", "👍", "😡", "🤔"];
-  const eSlot  = PW / emojis.length;
-  ctx.font = ef(27); ctx.textAlign = "center";
-  for (let i = 0; i < emojis.length; i++) {
-    ctx.fillText(emojis[i], PX + eSlot * i + eSlot / 2, PY + PH / 2 + 10);
-  }
-  ctx.textAlign = "left";
-
-  Y += H_REACT;
-
-  // ════════════════════════════════════════════════════
-  // 4. AVATAR + MESSAGE BUBBLE
+  // 3. AVATAR + MESSAGE BUBBLE
   // ════════════════════════════════════════════════════
   const ROW_TOP = Y + 6;
   const ACX = 12 + AVT_R, ACY = ROW_TOP + AVT_R;
@@ -289,6 +223,36 @@ async function handleTTQC(req, res) {
   }
 
   Y += H_BUBBLE;
+
+  // ════════════════════════════════════════════════════
+  // 4. REACTION PILL (di bawah bubble)
+  // ════════════════════════════════════════════════════
+  const emojis = ["❤️", "😂", "😂", "😂", "😂", "😂", "😂", "😂", "😂", "😂", "😂", "😁"];
+  const eSize  = 22;
+  const ePad   = 6;
+  const totalEW = emojis.length * (eSize + ePad) - ePad + 20; // perkiraan lebar pill
+  const rX = BXX + 4; // mulai dari kiri bubble
+  const rY = Y + 4;
+  const rH = 36;
+  const rW = Math.min(totalEW, W - 32);
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.08)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
+  ctx.fillStyle = C.pillBg;
+  rr(ctx, rX, rY, rW, rH, 18, true, false);
+  ctx.restore();
+
+  ctx.font = ef(eSize);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (let i = 0; i < emojis.length; i++) {
+    const ex = rX + 14 + i * (eSize + ePad) + eSize/2;
+    ctx.fillText(emojis[i], ex, rY + rH/2);
+  }
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+
+  Y += H_REACT_BOTTOM;
 
   // ════════════════════════════════════════════════════
   // 5. TIMESTAMP
@@ -338,11 +302,10 @@ async function handleTTQC(req, res) {
   Y = MY + MH + 10;
 
   // ════════════════════════════════════════════════════
-  // 7. STREAK PET ROW  (right-aligned, no emoji shortcuts)
+  // 7. STREAK PET ROW
   // ════════════════════════════════════════════════════
   ctx.fillStyle = C.div; ctx.fillRect(0, Y, W, 1);
 
-  // Faint bg overlay
   ctx.save();
   ctx.globalAlpha = 0.65;
   ctx.fillStyle = C.bg;
@@ -351,7 +314,7 @@ async function handleTTQC(req, res) {
 
   const SCY = Y + H_STREAK / 2;
 
-  // Streak Pet pill — right aligned, leave space for play button
+  // Streak Pet pill
   const PLAY_W = 40;
   const SP_W = 120, SP_H = 36;
   const SP_X  = W - PLAY_W - 14 - SP_W - 10;
@@ -362,7 +325,6 @@ async function handleTTQC(req, res) {
   ctx.fillStyle = C.streakBg;
   rr(ctx, SP_X, SP_Y, SP_W, SP_H, SP_H / 2, true, false);
 
-  // dot/circle icon inside pill
   ctx.fillStyle = dark ? "#8888bb" : "#9090b8";
   ctx.beginPath(); ctx.arc(SP_X + SP_H / 2, SCY, SP_H / 2 - 6, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
@@ -374,7 +336,7 @@ async function handleTTQC(req, res) {
   ctx.fillText("Streak Pet", SP_X + SP_H + 4, SCY + 5);
   ctx.restore();
 
-  // Play button (rounded square with triangle)
+  // Play button
   const PL_X = W - PLAY_W - 14;
   const PL_Y = SCY - PLAY_W / 2 + 4;
   ctx.save();
@@ -400,7 +362,7 @@ async function handleTTQC(req, res) {
 
   const ICY2 = Y + H_INPUT / 2;
 
-  // Camera icon (left)
+  // Camera icon
   const CX = 28;
   ctx.save();
   ctx.strokeStyle = C.icon; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
@@ -418,7 +380,7 @@ async function handleTTQC(req, res) {
   ctx.font = cf(15); ctx.fillStyle = C.sub;
   ctx.fillText("Kirim pesan...", IX + 18, ICY2 + 5);
 
-  // Smiley / sticker icon
+  // Smiley
   const SMX = W - 50, SMY = ICY2;
   ctx.save();
   ctx.strokeStyle = C.icon; ctx.lineWidth = 2; ctx.lineCap = "round";
@@ -429,18 +391,14 @@ async function handleTTQC(req, res) {
   ctx.beginPath(); ctx.arc(SMX, SMY + 2, 6, 0.1 * Math.PI, 0.9 * Math.PI, false); ctx.stroke();
   ctx.restore();
 
-  // Person + lock icon (right-most)
+  // Person + lock
   const PLX = W - 22, PLY = ICY2;
   ctx.save();
   ctx.strokeStyle = C.icon; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  // head circle
   ctx.beginPath(); ctx.arc(PLX, PLY - 8, 5, 0, Math.PI * 2); ctx.stroke();
-  // shoulders arc
   ctx.beginPath(); ctx.arc(PLX, PLY + 2, 8, Math.PI, 0, false); ctx.stroke();
-  // lock body
   ctx.fillStyle = C.icon;
   rr(ctx, PLX - 5, PLY + 6, 10, 8, 2, true, false);
-  // lock shackle
   ctx.strokeStyle = C.icon;
   ctx.beginPath(); ctx.arc(PLX, PLY + 6, 3, Math.PI, 0, false); ctx.stroke();
   ctx.restore();
@@ -452,9 +410,7 @@ async function handleTTQC(req, res) {
 // ── ICON HELPERS ─────────────────────────────────────────────
 function icoReply(ctx, cx, cy, _, C) {
   ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  // arrowhead pointing left
   ctx.beginPath(); ctx.moveTo(cx + 14, cy - 7); ctx.lineTo(cx + 2, cy); ctx.lineTo(cx + 14, cy + 7); ctx.stroke();
-  // tail curving up-right
   ctx.beginPath(); ctx.moveTo(cx + 2, cy); ctx.quadraticCurveTo(cx + 14, cy - 1, cx + 14, cy - 8); ctx.stroke();
   ctx.restore();
 }
@@ -466,21 +422,15 @@ function icoForward(ctx, cx, cy, _, C) {
 }
 function icoCopy(ctx, cx, cy, _, C) {
   ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 1.8; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  // front rect
   rr(ctx, cx + 1, cy - 5, 10, 11, 2, false, true);
-  // back rect (offset top-left)
   rr(ctx, cx + 4, cy - 9, 10, 11, 2, false, true);
   ctx.restore();
 }
 function icoTranslate(ctx, cx, cy, _, C) {
   ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 1.8; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  // horizontal base line
   ctx.beginPath(); ctx.moveTo(cx, cy - 7); ctx.lineTo(cx + 12, cy - 7); ctx.stroke();
-  // vertical stem
   ctx.beginPath(); ctx.moveTo(cx + 6, cy - 7); ctx.lineTo(cx + 6, cy - 2); ctx.stroke();
-  // horizontal sub-line
   ctx.beginPath(); ctx.moveTo(cx + 1, cy - 2); ctx.lineTo(cx + 11, cy - 2); ctx.stroke();
-  // two diagonal legs going down
   ctx.beginPath(); ctx.moveTo(cx + 3, cy - 2); ctx.lineTo(cx + 1, cy + 6); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(cx + 9, cy - 2); ctx.lineTo(cx + 11, cy + 6); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(cx + 3, cy + 2); ctx.lineTo(cx + 11, cy + 2); ctx.stroke();
