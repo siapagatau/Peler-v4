@@ -282,8 +282,8 @@ module.exports = async (req, res) => {
     const cW = W - PAD * 2;
     const cH = Math.round(H * 0.58);
 
-    // ── Header sedang: 13.5% dari tinggi card (tengah antara versi lama 10.5% dan baru 18%) ──
-    const HEAD_H = Math.round(cH * 0.135);
+    // ── Header: 15% dari tinggi card, cukup lapang atas-bawah ──
+    const HEAD_H = Math.round(cH * 0.15);
     const RADIUS = Math.round(cW * 0.032);
 
     ctx.save();
@@ -329,8 +329,8 @@ module.exports = async (req, res) => {
     }
     ctx.restore();
 
-    // ── Avatar ukuran sedang — padding kiri lebih lapang ──
-    const AV_R  = Math.round(HEAD_H * 0.38);
+    // ── Avatar: radius 32% HEAD_H → ada ~34% ruang atas & bawah ──
+    const AV_R  = Math.round(HEAD_H * 0.32);
     const AV_CX = cX + AV_R + Math.round(HEAD_H * 0.30);
     const AV_CY = cY + Math.round(HEAD_H * 0.50);
 
