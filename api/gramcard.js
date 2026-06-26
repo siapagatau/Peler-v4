@@ -282,8 +282,8 @@ module.exports = async (req, res) => {
     const cW = W - PAD * 2;
     const cH = Math.round(H * 0.58);
 
-    // ── Header lebih besar: 18% dari tinggi card (naik dari ~10.5%) ──
-    const HEAD_H = Math.round(cH * 0.18);
+    // ── Header sedang: 13.5% dari tinggi card (tengah antara versi lama 10.5% dan baru 18%) ──
+    const HEAD_H = Math.round(cH * 0.135);
     const RADIUS = Math.round(cW * 0.032);
 
     ctx.save();
@@ -329,10 +329,9 @@ module.exports = async (req, res) => {
     }
     ctx.restore();
 
-    // ── Avatar lebih besar ──────────────────────────────────
-    // Radius avatar = 42% dari tinggi header (dulu ~34%)
-    const AV_R  = Math.round(HEAD_H * 0.42);
-    const AV_CX = cX + Math.round(HEAD_H * 0.58);
+    // ── Avatar ukuran sedang ────────────────────────────────
+    const AV_R  = Math.round(HEAD_H * 0.38);
+    const AV_CX = cX + Math.round(HEAD_H * 0.54);
     const AV_CY = cY + Math.round(HEAD_H * 0.50);
 
     // Ring glowing
