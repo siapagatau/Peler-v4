@@ -433,6 +433,6 @@ module.exports = async (req, res) => {
     res.send(canvas.toBuffer("image/png"));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.send(canvas.toBuffer("image/png"));
   }
 };
