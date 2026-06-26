@@ -299,7 +299,14 @@ async function handleTTQC(req, res) {
 
   // ── 3. EMOJI PILL ─────────────────────────────────────────
   Y += GAP;
-  const PX = 12, PW = W - 24, PH = 44, PY = Y + 6;
+  const emojis = ["❤️","😂","😭","👍","😡","🤔"];
+  const E_SZ   = 22;
+  const E_GAP  = 10;
+  const E_PAD  = 12;
+  const PH     = 44;
+  const PW     = emojis.length * E_SZ + (emojis.length - 1) * E_GAP + E_PAD * 2;
+  const PX     = Math.round((W - PW) / 2);
+  const PY     = Y + 6;
 
   ctx.save();
   ctx.shadowColor = C.shadow; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3;
@@ -307,11 +314,10 @@ async function handleTTQC(req, res) {
   rr(ctx, PX, PY, PW, PH, PH/2); ctx.fill();
   ctx.restore();
 
-  const emojis = ["❤️","😂","😭","👍","😡","🤔"];
-  const slotW  = PW / emojis.length;
-  ctx.font = EF(22); ctx.textAlign = "center";
+  ctx.font = EF(E_SZ); ctx.textAlign = "center";
   for (let i = 0; i < emojis.length; i++) {
-    ctx.fillText(emojis[i], PX + slotW*i + slotW/2, PY + PH/2 + 8);
+    const ex = PX + E_PAD + E_SZ/2 + i * (E_SZ + E_GAP);
+    ctx.fillText(emojis[i], ex, PY + PH/2 + 8);
   }
   ctx.textAlign = "left";
   Y += H_PILL;
