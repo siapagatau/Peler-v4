@@ -17,13 +17,18 @@ try {
   } catch (_) {}
 } catch (e) { console.log("FONT ERROR:", e.message); }
 
-// Font helpers — persis pola chatFont() di qc.js (ada spasi setelah koma)
-function FN(sz)  { return `normal ${sz}px ${hasEmoji ? "'Inter', 'NotoColorEmoji'" : "Inter,sans-serif"}`; }
-function FB(sz)  { return `bold ${sz}px ${hasEmoji ? "'InterBold', 'NotoColorEmoji'" : "InterBold,sans-serif"}`; }
-function FSB(sz) { return `600 ${sz}px ${hasEmoji ? "'InterSemiBold', 'Inter', 'NotoColorEmoji'" : "InterSemiBold,Inter,sans-serif"}`; }
-// captionFont: sama persis signature chatFont() dari qc.js
+// ── PERBAIKAN: NotoColorEmoji diutamakan ────────────────────────────────
+function FN(sz)  {
+  return `normal ${sz}px ${hasEmoji ? "'NotoColorEmoji', 'Inter'" : "Inter,sans-serif"}`;
+}
+function FB(sz)  {
+  return `bold ${sz}px ${hasEmoji ? "'NotoColorEmoji', 'InterBold', 'Inter'" : "InterBold,sans-serif"}`;
+}
+function FSB(sz) {
+  return `600 ${sz}px ${hasEmoji ? "'NotoColorEmoji', 'InterSemiBold', 'Inter'" : "InterSemiBold,Inter,sans-serif"}`;
+}
 function captionFont(size, weight = 'normal') {
-  const family = hasEmoji ? "'Inter', 'NotoColorEmoji'" : "Inter";
+  const family = hasEmoji ? "'NotoColorEmoji', 'Inter'" : "Inter";
   return `${weight} ${size}px ${family}`;
 }
 
@@ -396,14 +401,13 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── 4b. Caption — pakai captionFont seperti iqc (tanpa stripping emoji) ──
+    // ── 4b. Caption — pakai captionFont yang sudah diperbaiki ────────────
     if (caption && caption.trim()) {
       const CAP_FONT_SZ = 15;
       const CAP_LH      = 22.5;
       const CAP_MAX_W   = CARD_W - 56;
       const CAP_X       = CARD_X + 20;
 
-      // Ganti literal \n dari query ke newline asli, seperti di iqc
       const rawCaption = caption.replace(/\\n/g, "\n").trim();
       if (rawCaption) {
         ctx.font = captionFont(CAP_FONT_SZ);
@@ -431,10 +435,10 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── Mute icon — posisi di bawah progress bar ──────────────────────────
+    // ── Mute icon ──────────────────────────────────────────────────────────
     const MUTE_R  = 17;
     const MUTE_CX = CARD_X + CARD_W - 14 - MUTE_R;
-    const MUTE_CY = CARD_Y + 44 + MUTE_R;   // 44px dari atas card, di bawah progress bar
+    const MUTE_CY = CARD_Y + 44 + MUTE_R;
 
     ctx.save();
     ctx.fillStyle = "rgba(20,20,28,0.42)";
