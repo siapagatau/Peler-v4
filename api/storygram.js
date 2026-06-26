@@ -2,8 +2,8 @@ const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 const fs   = require("fs");
 const path = require("path");
 
-// ── FONTS ──────────────────────────────────────────────────────────────────
-let hasEmoji = false;
+// ── FONTS (sama persis dengan iqc) ──────────────────────────────────────
+let hasEmojiFont = false;
 try {
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")), "Inter");
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf")),    "InterBold");
@@ -13,22 +13,13 @@ try {
       fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf")),
       "NotoColorEmoji"
     );
-    hasEmoji = true;
+    hasEmojiFont = true;
   } catch (_) {}
 } catch (e) { console.log("FONT ERROR:", e.message); }
 
-// ── PERBAIKAN: NotoColorEmoji diutamakan ────────────────────────────────
-function FN(sz)  {
-  return `normal ${sz}px ${hasEmoji ? "'NotoColorEmoji', 'Inter'" : "Inter,sans-serif"}`;
-}
-function FB(sz)  {
-  return `bold ${sz}px ${hasEmoji ? "'NotoColorEmoji', 'InterBold', 'Inter'" : "InterBold,sans-serif"}`;
-}
-function FSB(sz) {
-  return `600 ${sz}px ${hasEmoji ? "'NotoColorEmoji', 'InterSemiBold', 'Inter'" : "InterSemiBold,Inter,sans-serif"}`;
-}
-function captionFont(size, weight = 'normal') {
-  const family = hasEmoji ? "'NotoColorEmoji', 'Inter'" : "Inter";
+// ── SATU-SATUNYA FUNGSI FONT (sama dengan iqc) ─────────────────────────
+function chatFont(size, weight = 'normal') {
+  const family = hasEmojiFont ? "'Inter', 'NotoColorEmoji'" : "Inter";
   return `${weight} ${size}px ${family}`;
 }
 
@@ -391,17 +382,19 @@ module.exports = async (req, res) => {
       const TX = AV_CX + AV_R + 14;
       ctx.save();
       ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 8;
-      ctx.font = FB(15.5); ctx.fillStyle = "#ffffff";
+      ctx.font = chatFont(15.5, 'bold');
+      ctx.fillStyle = "#ffffff";
       ctx.fillText(dn, TX, AV_CY - 8);
       ctx.restore();
       if (handle || timeAgo) {
         const sub = [handle ? `@${handle}` : "", timeAgo].filter(Boolean).join("  ·  ");
-        ctx.font = FN(12); ctx.fillStyle = "rgba(255,255,255,0.62)";
+        ctx.font = chatFont(12);
+        ctx.fillStyle = "rgba(255,255,255,0.62)";
         ctx.fillText(sub, TX, AV_CY + 12);
       }
     }
 
-    // ── 4b. Caption — pakai captionFont yang sudah diperbaiki ────────────
+    // ── 4b. Caption ───────────────────────────────────────────────────────
     if (caption && caption.trim()) {
       const CAP_FONT_SZ = 15;
       const CAP_LH      = 22.5;
@@ -410,14 +403,14 @@ module.exports = async (req, res) => {
 
       const rawCaption = caption.replace(/\\n/g, "\n").trim();
       if (rawCaption) {
-        ctx.font = captionFont(CAP_FONT_SZ);
+        ctx.font = chatFont(CAP_FONT_SZ);
         const capLines = wrapText(ctx, rawCaption, CAP_MAX_W).slice(0, 4);
         const capTotalH = capLines.length * CAP_LH;
         const capBaseY  = AV_CY - AV_R - 15;
         const capStartY = capBaseY - capTotalH + CAP_LH;
 
         ctx.save();
-        ctx.font = captionFont(CAP_FONT_SZ);
+        ctx.font = chatFont(CAP_FONT_SZ);
         ctx.textAlign    = "left";
         ctx.textBaseline = "alphabetic";
         ctx.fillStyle    = "rgba(255,255,255,0.96)";
@@ -499,7 +492,7 @@ module.exports = async (req, res) => {
 
         ICON_FNS[key](ctx, ICON_CX, rowCY, ICON_S, color, key === "like" && isLiked);
 
-        ctx.font = FSB(LABEL_SIZE);
+        ctx.font = chatFont(LABEL_SIZE, '600');
         ctx.fillStyle = color; ctx.textBaseline = "middle";
         ctx.fillText(ICON_LABELS[key], ICON_CX + ICON_S * 2.15, rowCY + 0.5);
         ctx.textBaseline = "alphabetic";
@@ -507,7 +500,7 @@ module.exports = async (req, res) => {
         const cnt = counts[key];
         if (cnt !== "" && cnt !== undefined && !isNaN(parseInt(cnt))) {
           const countStr = fmt(parseInt(cnt));
-          ctx.font = FN(COUNT_SIZE);
+          ctx.font = chatFont(COUNT_SIZE);
           ctx.fillStyle = isRep ? "#fb7185" : "rgba(255,255,255,0.40)";
           ctx.textBaseline = "middle";
           const cw = ctx.measureText(countStr).width;
