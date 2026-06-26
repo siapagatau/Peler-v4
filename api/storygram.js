@@ -2,26 +2,24 @@ const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 const fs   = require("fs");
 const path = require("path");
 
-// ── FONTS (sama persis dengan iqc) ──────────────────────────────────────
-let hasEmojiFont = false;
+// ── FONTS ──────────────────────────────────────────────────────────────────
+let hasEmoji = false;
 try {
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")), "Inter");
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf")),    "InterBold");
-  GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-SemiBold.ttf")), "InterSemiBold");
+  // Inter-SemiBold tidak dipakai lagi
   try {
     GlobalFonts.register(
       fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf")),
       "NotoColorEmoji"
     );
-    hasEmojiFont = true;
+    hasEmoji = true;
   } catch (_) {}
 } catch (e) { console.log("FONT ERROR:", e.message); }
 
-// ── SATU-SATUNYA FUNGSI FONT (sama dengan iqc) ─────────────────────────
-function chatFont(size, weight = 'normal') {
-  const family = hasEmojiFont ? "'Inter', 'NotoColorEmoji'" : "Inter";
-  return `${weight} ${size}px ${family}`;
-}
+const FN  = (sz) => `normal ${sz}px ${hasEmoji ? "'Inter','NotoColorEmoji'" : "Inter,sans-serif"}`;
+const FB  = (sz) => `bold ${sz}px ${hasEmoji ? "'InterBold','NotoColorEmoji'" : "InterBold,sans-serif"}`;
+// FSB dihapus
 
 // ── UTILS ──────────────────────────────────────────────────────────────────
 function rr(ctx, x, y, w, h, r) {
@@ -32,6 +30,18 @@ function rr(ctx, x, y, w, h, r) {
   ctx.arcTo(x + w, y + h, x,     y + h, r);
   ctx.arcTo(x,     y + h, x,     y,     r);
   ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+
+function rrTop(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h);
   ctx.closePath();
 }
 
@@ -97,7 +107,10 @@ function drawNoise(ctx, x, y, w, h, opacity = 0.035) {
   const imgData = nctx.createImageData(96, 96);
   for (let i = 0; i < imgData.data.length; i += 4) {
     const v = Math.floor(Math.random() * 255);
-    imgData.data[i] = v; imgData.data[i + 1] = v; imgData.data[i + 2] = v; imgData.data[i + 3] = 255;
+    imgData.data[i] = v;
+    imgData.data[i + 1] = v;
+    imgData.data[i + 2] = v;
+    imgData.data[i + 3] = 255;
   }
   nctx.putImageData(imgData, 0, 0);
   ctx.save();
@@ -125,7 +138,7 @@ async function drawAvatar(ctx, img, cx, cy, r) {
   ctx.restore();
 }
 
-// ── ICONS ──────────────────────────────────────────────────────────────────
+// ── ICONS ──────────────────────────────────────────────────────────────
 function icoHeart(ctx, cx, cy, s, color, filled) {
   ctx.save();
   ctx.strokeStyle = color; ctx.fillStyle = color;
@@ -162,13 +175,25 @@ function icoRepost(ctx, cx, cy, s, color) {
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   const w = s * 1.4, h = s * 1.0;
   ctx.beginPath();
-  ctx.moveTo(cx - w/2 + s*0.3, cy - h*0.6); ctx.lineTo(cx + w/2, cy - h*0.6); ctx.lineTo(cx + w/2, cy + h*0.12); ctx.stroke();
+  ctx.moveTo(cx - w/2 + s*0.3, cy - h*0.6);
+  ctx.lineTo(cx + w/2, cy - h*0.6);
+  ctx.lineTo(cx + w/2, cy + h*0.12);
+  ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(cx + w/2 - s*0.4, cy - h*0.6 - s*0.35); ctx.lineTo(cx + w/2, cy - h*0.6); ctx.lineTo(cx + w/2 - s*0.4, cy - h*0.6 + s*0.35); ctx.stroke();
+  ctx.moveTo(cx + w/2 - s*0.4, cy - h*0.6 - s*0.35);
+  ctx.lineTo(cx + w/2, cy - h*0.6);
+  ctx.lineTo(cx + w/2 - s*0.4, cy - h*0.6 + s*0.35);
+  ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(cx + w/2 - s*0.3, cy + h*0.6); ctx.lineTo(cx - w/2, cy + h*0.6); ctx.lineTo(cx - w/2, cy - h*0.12); ctx.stroke();
+  ctx.moveTo(cx + w/2 - s*0.3, cy + h*0.6);
+  ctx.lineTo(cx - w/2, cy + h*0.6);
+  ctx.lineTo(cx - w/2, cy - h*0.12);
+  ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(cx - w/2 + s*0.4, cy + h*0.6 - s*0.35); ctx.lineTo(cx - w/2, cy + h*0.6); ctx.lineTo(cx - w/2 + s*0.4, cy + h*0.6 + s*0.35); ctx.stroke();
+  ctx.moveTo(cx - w/2 + s*0.4, cy + h*0.6 - s*0.35);
+  ctx.lineTo(cx - w/2, cy + h*0.6);
+  ctx.lineTo(cx - w/2 + s*0.4, cy + h*0.6 + s*0.35);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -176,9 +201,21 @@ function icoShare(ctx, cx, cy, s, color) {
   ctx.save();
   ctx.strokeStyle = color; ctx.fillStyle = color;
   ctx.lineWidth = s * 0.14; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.9); ctx.lineTo(cx, cy + s * 0.4); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx - s * 0.5, cy - s * 0.38); ctx.lineTo(cx, cy - s * 0.9); ctx.lineTo(cx + s * 0.5, cy - s * 0.38); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx - s * 0.78, cy + s * 0.1); ctx.lineTo(cx - s * 0.78, cy + s * 0.9); ctx.lineTo(cx + s * 0.78, cy + s * 0.9); ctx.lineTo(cx + s * 0.78, cy + s * 0.1); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - s * 0.9);
+  ctx.lineTo(cx, cy + s * 0.4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.5, cy - s * 0.38);
+  ctx.lineTo(cx, cy - s * 0.9);
+  ctx.lineTo(cx + s * 0.5, cy - s * 0.38);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.78, cy + s * 0.1);
+  ctx.lineTo(cx - s * 0.78, cy + s * 0.9);
+  ctx.lineTo(cx + s * 0.78, cy + s * 0.9);
+  ctx.lineTo(cx + s * 0.78, cy + s * 0.1);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -187,7 +224,8 @@ function icoReport(ctx, cx, cy, s, color) {
   ctx.strokeStyle = color; ctx.fillStyle = color;
   ctx.lineWidth = s * 0.15; ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath(); ctx.arc(cx, cy, s * 0.88, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.42); ctx.lineTo(cx, cy + s * 0.1); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - s * 0.42); ctx.lineTo(cx, cy + s * 0.1); ctx.stroke();
   ctx.beginPath(); ctx.arc(cx, cy + s * 0.44, s * 0.10, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
@@ -195,7 +233,7 @@ function icoReport(ctx, cx, cy, s, color) {
 const ICON_FNS    = { like: icoHeart, comment: icoComment, repost: icoRepost, share: icoShare, report: icoReport };
 const ICON_LABELS = { like: "Suka", comment: "Komentar", repost: "Teruskan", share: "Bagikan", report: "Laporkan" };
 
-// ── COLOR HELPERS ─────────────────────────────────────────────────────────
+// ── COLOR HELPERS ────────────────────────────────────────────────────────
 function hexToRgb(hex) {
   hex = hex.replace("#", "");
   if (hex.length === 3) hex = hex.split("").map(c => c + c).join("");
@@ -212,7 +250,7 @@ function lighten(hex, amt) {
   return `rgb(${l(r)},${l(g)},${l(b)})`;
 }
 
-// ── MAIN HANDLER ──────────────────────────────────────────────────────────
+// ── MAIN HANDLER ───────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -243,7 +281,6 @@ module.exports = async (req, res) => {
     const totalSegments = Math.max(1, parseInt(segments) || 5);
     const accentLight = lighten(accentColor, 0.35);
 
-    // ── Canvas ────────────────────────────────────────────────────────────
     const W     = 420;
     const SCALE = 2;
     const CARD_H      = 560;
@@ -260,7 +297,6 @@ module.exports = async (req, res) => {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    // ── 1. Canvas background ──────────────────────────────────────────────
     const bgImg = await loadSafe(background);
     if (bgImg) {
       drawBlur(ctx, bgImg, 0, 0, W, H, 24);
@@ -282,21 +318,26 @@ module.exports = async (req, res) => {
     }
     drawNoise(ctx, 0, 0, W, H, 0.025);
 
-    // ── 2. Story card ─────────────────────────────────────────────────────
     const CARD_X = CANVAS_PAD;
     const CARD_Y = CANVAS_PAD;
     const CARD_W = W - CANVAS_PAD * 2;
     const CARD_R = 24;
 
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 60; ctx.shadowOffsetY = 26;
+    ctx.shadowColor = "rgba(0,0,0,0.55)";
+    ctx.shadowBlur  = 60;
+    ctx.shadowOffsetY = 26;
     ctx.fillStyle = "#000";
-    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R); ctx.fill();
+    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
+    ctx.fill();
     ctx.restore();
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur  = 18;
+    ctx.shadowOffsetY = 6;
     ctx.fillStyle = "#000";
-    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R); ctx.fill();
+    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
+    ctx.fill();
     ctx.restore();
 
     ctx.save();
@@ -308,69 +349,99 @@ module.exports = async (req, res) => {
       drawCover(ctx, mediaImg, CARD_X, CARD_Y, CARD_W, CARD_H);
     } else {
       const ph = ctx.createLinearGradient(CARD_X, CARD_Y, CARD_X + CARD_W, CARD_Y + CARD_H);
-      ph.addColorStop(0, "#15151f"); ph.addColorStop(0.55, rgba(accentColor, 0.22)); ph.addColorStop(1, "#0c0c14");
-      ctx.fillStyle = ph; ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
-      const cg = ctx.createRadialGradient(CARD_X+CARD_W/2, CARD_Y+CARD_H*0.42, 0, CARD_X+CARD_W/2, CARD_Y+CARD_H*0.42, CARD_W*0.6);
-      cg.addColorStop(0, rgba(accentColor, 0.30)); cg.addColorStop(1, "transparent");
-      ctx.fillStyle = cg; ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
+      ph.addColorStop(0,   "#15151f");
+      ph.addColorStop(0.55, rgba(accentColor, 0.22));
+      ph.addColorStop(1,   "#0c0c14");
+      ctx.fillStyle = ph;
+      ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
+      const cg = ctx.createRadialGradient(
+        CARD_X + CARD_W / 2, CARD_Y + CARD_H * 0.42, 0,
+        CARD_X + CARD_W / 2, CARD_Y + CARD_H * 0.42, CARD_W * 0.6
+      );
+      cg.addColorStop(0, rgba(accentColor, 0.30));
+      cg.addColorStop(1, "transparent");
+      ctx.fillStyle = cg;
+      ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
       drawNoise(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 0.05);
     }
 
     const vigTop = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + CARD_H * 0.26);
-    vigTop.addColorStop(0, "rgba(0,0,0,0.65)"); vigTop.addColorStop(1, "transparent");
-    ctx.fillStyle = vigTop; ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H * 0.26);
+    vigTop.addColorStop(0, "rgba(0,0,0,0.65)");
+    vigTop.addColorStop(1, "transparent");
+    ctx.fillStyle = vigTop;
+    ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H * 0.26);
 
     const vigBot = ctx.createLinearGradient(0, CARD_Y + CARD_H * 0.46, 0, CARD_Y + CARD_H);
-    vigBot.addColorStop(0, "transparent"); vigBot.addColorStop(0.55, "rgba(0,0,0,0.40)"); vigBot.addColorStop(1, "rgba(0,0,0,0.86)");
-    ctx.fillStyle = vigBot; ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
+    vigBot.addColorStop(0,    "transparent");
+    vigBot.addColorStop(0.55, "rgba(0,0,0,0.40)");
+    vigBot.addColorStop(1,    "rgba(0,0,0,0.86)");
+    ctx.fillStyle = vigBot;
+    ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
+
     ctx.restore();
 
     ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.lineWidth = 1;
-    rr(ctx, CARD_X+0.5, CARD_Y+0.5, CARD_W-1, CARD_H-1, CARD_R); ctx.stroke();
-    ctx.restore();
-    ctx.save();
-    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R); ctx.clip();
-    const topHL = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + 90);
-    topHL.addColorStop(0, "rgba(255,255,255,0.10)"); topHL.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = topHL; ctx.fillRect(CARD_X, CARD_Y, CARD_W, 90);
+    ctx.strokeStyle = "rgba(255,255,255,0.10)";
+    ctx.lineWidth   = 1;
+    rr(ctx, CARD_X + 0.5, CARD_Y + 0.5, CARD_W - 1, CARD_H - 1, CARD_R);
+    ctx.stroke();
     ctx.restore();
 
-    // ── 3. Progress bars ──────────────────────────────────────────────────
-    const PB_TOP = CARD_Y + 16, PB_H = 3, PB_GAP = 5;
-    const PB_SIDE = CARD_X + 14, PB_TOTAL_W = CARD_W - 28;
+    ctx.save();
+    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
+    ctx.clip();
+    const topHighlight = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + 90);
+    topHighlight.addColorStop(0, "rgba(255,255,255,0.10)");
+    topHighlight.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = topHighlight;
+    ctx.fillRect(CARD_X, CARD_Y, CARD_W, 90);
+    ctx.restore();
+
+    const PB_TOP    = CARD_Y + 16;
+    const PB_H      = 3;
+    const PB_GAP    = 5;
+    const PB_SIDE   = CARD_X + 14;
+    const PB_TOTAL_W = CARD_W - 28;
     const segW = (PB_TOTAL_W - PB_GAP * (totalSegments - 1)) / totalSegments;
 
     for (let i = 0; i < totalSegments; i++) {
       const sx = PB_SIDE + i * (segW + PB_GAP);
       ctx.fillStyle = "rgba(255,255,255,0.24)";
-      rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2); ctx.fill();
+      rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2);
+      ctx.fill();
       if (i < activeSegment) {
         ctx.fillStyle = "#ffffff";
-        rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2); ctx.fill();
+        rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2);
+        ctx.fill();
       } else if (i === activeSegment) {
-        ctx.save(); ctx.shadowColor = "rgba(255,255,255,0.7)"; ctx.shadowBlur = 4;
+        ctx.save();
+        ctx.shadowColor = "rgba(255,255,255,0.7)";
+        ctx.shadowBlur = 4;
         ctx.fillStyle = "#ffffff";
-        rr(ctx, sx, PB_TOP, segW * 0.55, PB_H, PB_H / 2); ctx.fill();
+        rr(ctx, sx, PB_TOP, segW * 0.55, PB_H, PB_H / 2);
+        ctx.fill();
         ctx.restore();
       }
     }
 
-    // ── 4. Avatar + username overlay ──────────────────────────────────────
     const AV_R  = 24;
     const AV_CX = CARD_X + 20 + AV_R;
     const AV_CY = CARD_Y + CARD_H - 52;
     const avatarImg = await loadSafe(avatar);
 
     ctx.save();
-    ctx.shadowColor = rgba(accentColor, 0.55); ctx.shadowBlur = 16;
-    const ringGrad = ctx.createLinearGradient(AV_CX-AV_R, AV_CY-AV_R, AV_CX+AV_R, AV_CY+AV_R);
-    ringGrad.addColorStop(0, accentLight); ringGrad.addColorStop(1, accentColor);
-    ctx.strokeStyle = ringGrad; ctx.lineWidth = 2.5;
+    ctx.shadowColor = rgba(accentColor, 0.55);
+    ctx.shadowBlur  = 16;
+    const ringGrad = ctx.createLinearGradient(AV_CX - AV_R, AV_CY - AV_R, AV_CX + AV_R, AV_CY + AV_R);
+    ringGrad.addColorStop(0, accentLight);
+    ringGrad.addColorStop(1, accentColor);
+    ctx.strokeStyle = ringGrad;
+    ctx.lineWidth   = 2.5;
     ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 4, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
     ctx.save();
-    ctx.strokeStyle = "rgba(10,10,14,0.55)"; ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(10,10,14,0.55)";
+    ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 2, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
 
@@ -380,91 +451,105 @@ module.exports = async (req, res) => {
       const maxDispLen = 22;
       const dn = username.length > maxDispLen ? username.slice(0, maxDispLen - 1) + "…" : username;
       const TX = AV_CX + AV_R + 14;
+      const TY_name = AV_CY - 8;
+      const TY_sub  = AV_CY + 12;
+
       ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 8;
-      ctx.font = chatFont(15.5, 'bold');
+      ctx.shadowColor = "rgba(0,0,0,0.5)";
+      ctx.shadowBlur = 8;
+      ctx.font = FB(15.5);
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(dn, TX, AV_CY - 8);
+      ctx.fillText(dn, TX, TY_name);
       ctx.restore();
+
       if (handle || timeAgo) {
         const sub = [handle ? `@${handle}` : "", timeAgo].filter(Boolean).join("  ·  ");
-        ctx.font = chatFont(12);
+        ctx.font = FN(12);
         ctx.fillStyle = "rgba(255,255,255,0.62)";
-        ctx.fillText(sub, TX, AV_CY + 12);
+        ctx.fillText(sub, TX, TY_sub);
       }
     }
 
-    // ── 4b. Caption ───────────────────────────────────────────────────────
     if (caption && caption.trim()) {
       const CAP_FONT_SZ = 15;
       const CAP_LH      = 22.5;
       const CAP_MAX_W   = CARD_W - 56;
       const CAP_X       = CARD_X + 20;
 
-      const rawCaption = caption.replace(/\\n/g, "\n").trim();
-      if (rawCaption) {
-        ctx.font = chatFont(CAP_FONT_SZ);
-        const capLines = wrapText(ctx, rawCaption, CAP_MAX_W).slice(0, 4);
-        const capTotalH = capLines.length * CAP_LH;
-        const capBaseY  = AV_CY - AV_R - 15;
-        const capStartY = capBaseY - capTotalH + CAP_LH;
+      ctx.font = FN(CAP_FONT_SZ);
+      const capLines = wrapText(ctx, caption.trim(), CAP_MAX_W).slice(0, 4);
+      const capTotalH = capLines.length * CAP_LH;
 
-        ctx.save();
-        ctx.font = chatFont(CAP_FONT_SZ);
-        ctx.textAlign    = "left";
-        ctx.textBaseline = "alphabetic";
-        ctx.fillStyle    = "rgba(255,255,255,0.96)";
+      const capBaseY  = AV_CY - AV_R - 15;
+      const capStartY = capBaseY - capTotalH + CAP_LH;
 
-        for (let i = 0; i < capLines.length; i++) {
-          const ly = capStartY + i * CAP_LH;
-          ctx.shadowColor = "rgba(0,0,0,0.80)";
-          ctx.shadowBlur  = 14;
-          ctx.shadowOffsetY = 1;
-          ctx.fillText(capLines[i], CAP_X, ly);
-          ctx.shadowBlur = 4;
-          ctx.fillText(capLines[i], CAP_X, ly);
-        }
-        ctx.restore();
+      ctx.save();
+      ctx.font         = FN(CAP_FONT_SZ);
+      ctx.textAlign    = "left";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle    = "rgba(255,255,255,0.96)";
+
+      for (let i = 0; i < capLines.length; i++) {
+        const ly = capStartY + i * CAP_LH;
+        ctx.shadowColor   = "rgba(0,0,0,0.80)";
+        ctx.shadowBlur    = 14;
+        ctx.shadowOffsetY = 1;
+        ctx.fillText(capLines[i], CAP_X, ly);
+        ctx.shadowBlur    = 4;
+        ctx.fillText(capLines[i], CAP_X, ly);
       }
+      ctx.shadowColor = "transparent";
+      ctx.restore();
     }
 
-    // ── Mute icon ──────────────────────────────────────────────────────────
-    const MUTE_R  = 17;
+    const MUTE_R = 17;
     const MUTE_CX = CARD_X + CARD_W - 14 - MUTE_R;
-    const MUTE_CY = CARD_Y + 44 + MUTE_R;
-
+    const MUTE_CY = CARD_Y + 14 + MUTE_R;
     ctx.save();
     ctx.fillStyle = "rgba(20,20,28,0.42)";
-    ctx.strokeStyle = "rgba(255,255,255,0.14)"; ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(MUTE_CX, MUTE_CY, MUTE_R, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
     ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 1.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
     const mx = MUTE_CX - 4.5, my = MUTE_CY;
     ctx.beginPath();
-    ctx.moveTo(mx-5, my-3); ctx.lineTo(mx, my-3); ctx.lineTo(mx+5, my-7);
-    ctx.lineTo(mx+5, my+7); ctx.lineTo(mx, my+3); ctx.lineTo(mx-5, my+3); ctx.closePath(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(mx+9, my-4); ctx.lineTo(mx+14, my+4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(mx+14, my-4); ctx.lineTo(mx+9, my+4); ctx.stroke();
+    ctx.moveTo(mx - 5, my - 3); ctx.lineTo(mx, my - 3);
+    ctx.lineTo(mx + 5, my - 7); ctx.lineTo(mx + 5, my + 7);
+    ctx.lineTo(mx, my + 3); ctx.lineTo(mx - 5, my + 3); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx + 9, my - 4); ctx.lineTo(mx + 14, my + 4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx + 14, my - 4); ctx.lineTo(mx + 9, my + 4); ctx.stroke();
     ctx.restore();
 
-    // ── 5. Action menu ────────────────────────────────────────────────────
+    // ── 5. Action menu ──────────────────────────────────────────────
     if (menuKeys.length > 0) {
-      const MENU_X = CARD_X, MENU_W = CARD_W;
+      const MENU_X = CARD_X;
+      const MENU_W = CARD_W;
       const MENU_Y = CARD_Y + CARD_H + BELOW_GAP;
-      const MENU_R = 20, ICON_S = 11.5, LABEL_SIZE = 14.5, COUNT_SIZE = 13;
+      const MENU_R = 20;
+      const ICON_S = 11.5;
+      const LABEL_SIZE = 14.5;
+      const COUNT_SIZE = 13;
       const ICON_CX = MENU_X + 24 + ICON_S;
 
       ctx.save();
       ctx.fillStyle = "rgba(16,16,23,0.90)";
-      ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 32; ctx.shadowOffsetY = 10;
-      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R); ctx.fill();
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur  = 32;
+      ctx.shadowOffsetY = 10;
+      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R);
+      ctx.fill();
       ctx.restore();
 
       ctx.save();
-      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R); ctx.clip();
+      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R);
+      ctx.clip();
       const sheen = ctx.createLinearGradient(0, MENU_Y, 0, MENU_Y + 40);
-      sheen.addColorStop(0, "rgba(255,255,255,0.06)"); sheen.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = sheen; ctx.fillRect(MENU_X, MENU_Y, MENU_W, 40);
+      sheen.addColorStop(0, "rgba(255,255,255,0.06)");
+      sheen.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = sheen;
+      ctx.fillRect(MENU_X, MENU_Y, MENU_W, 40);
+
       const likeIdx = menuKeys.indexOf("like");
       if (likeIdx !== -1 && isLiked) {
         const rowY = MENU_Y + MENU_PAD_Y + likeIdx * MENU_ROW_H;
@@ -474,16 +559,18 @@ module.exports = async (req, res) => {
       ctx.restore();
 
       ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1;
-      rr(ctx, MENU_X+0.5, MENU_Y+0.5, MENU_W-1, MENU_H-1, MENU_R); ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      rr(ctx, MENU_X + 0.5, MENU_Y + 0.5, MENU_W - 1, MENU_H - 1, MENU_R);
+      ctx.stroke();
       ctx.restore();
 
       for (let i = 0; i < menuKeys.length; i++) {
-        const key   = menuKeys[i];
-        const isRep = key === "report";
-        const color = isLiked && key === "like" ? "#fb7185" : isRep ? "#fb7185" : "#f5f5f7";
-        const rowY  = MENU_Y + MENU_PAD_Y + i * MENU_ROW_H;
-        const rowCY = rowY + MENU_ROW_H / 2;
+        const key    = menuKeys[i];
+        const isRep  = key === "report";
+        const color  = isLiked && key === "like" ? "#fb7185" : isRep ? "#fb7185" : "#f5f5f7";
+        const rowY   = MENU_Y + MENU_PAD_Y + i * MENU_ROW_H;
+        const rowCY  = rowY + MENU_ROW_H / 2;
 
         if (i > 0) {
           ctx.fillStyle = "rgba(255,255,255,0.06)";
@@ -492,15 +579,18 @@ module.exports = async (req, res) => {
 
         ICON_FNS[key](ctx, ICON_CX, rowCY, ICON_S, color, key === "like" && isLiked);
 
-        ctx.font = chatFont(LABEL_SIZE, '600');
-        ctx.fillStyle = color; ctx.textBaseline = "middle";
-        ctx.fillText(ICON_LABELS[key], ICON_CX + ICON_S * 2.15, rowCY + 0.5);
+        // 👇 GANTI FSB jadi FB
+        ctx.font = FB(LABEL_SIZE);
+        ctx.fillStyle = color;
+        ctx.textBaseline = "middle";
+        const LABEL_X = ICON_CX + ICON_S * 2.15;
+        ctx.fillText(ICON_LABELS[key], LABEL_X, rowCY + 0.5);
         ctx.textBaseline = "alphabetic";
 
         const cnt = counts[key];
         if (cnt !== "" && cnt !== undefined && !isNaN(parseInt(cnt))) {
           const countStr = fmt(parseInt(cnt));
-          ctx.font = chatFont(COUNT_SIZE);
+          ctx.font = FN(COUNT_SIZE);
           ctx.fillStyle = isRep ? "#fb7185" : "rgba(255,255,255,0.40)";
           ctx.textBaseline = "middle";
           const cw = ctx.measureText(countStr).width;
