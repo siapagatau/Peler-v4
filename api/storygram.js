@@ -502,9 +502,9 @@ module.exports = async (req, res) => {
       ctx.restore();
     }
 
-    const MUTE_R = 17;
-    const MUTE_CX = CARD_X + CARD_W - 14 - MUTE_R;
-    const MUTE_CY = CARD_Y + 14 + MUTE_R;
+const MUTE_R = 17;
+const MUTE_CX = CARD_X + CARD_W - 14 - MUTE_R;
+const MUTE_CY = PB_TOP + PB_H + 14 + MUTE_R; // turun, mulai setelah progress bar + gap 14px
     ctx.save();
     ctx.fillStyle = "rgba(20,20,28,0.42)";
     ctx.strokeStyle = "rgba(255,255,255,0.14)";
