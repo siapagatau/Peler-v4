@@ -7,6 +7,7 @@ let hasEmoji = false;
 try {
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")), "Inter");
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf")),    "InterBold");
+  GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-SemiBold.ttf")), "InterSemiBold");
   try {
     GlobalFonts.register(
       fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf")),
@@ -18,6 +19,7 @@ try {
 
 const FN  = (sz) => `normal ${sz}px ${hasEmoji ? "'Inter','NotoColorEmoji'" : "Inter,sans-serif"}`;
 const FB  = (sz) => `bold ${sz}px ${hasEmoji ? "'InterBold','NotoColorEmoji'" : "InterBold,sans-serif"}`;
+const FSB = (sz) => `600 ${sz}px ${hasEmoji ? "'InterSemiBold','Inter','NotoColorEmoji'" : "InterSemiBold,Inter,sans-serif"}`;
 const FI  = (sz) => `italic normal ${sz}px ${hasEmoji ? "'Inter','NotoColorEmoji'" : "Inter,sans-serif"}`;
 
 // ── UTILS ──────────────────────────────────────────────────────────────────
@@ -29,6 +31,19 @@ function rr(ctx, x, y, w, h, r) {
   ctx.arcTo(x + w, y + h, x,     y + h, r);
   ctx.arcTo(x,     y + h, x,     y,     r);
   ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+
+// Rounded rect with only top corners rounded (for joining panels seamlessly)
+function rrTop(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h);
   ctx.closePath();
 }
 
@@ -50,7 +65,7 @@ function wrapText(ctx, text, maxW) {
     const words = hard.split(" ");
     let cur = "";
     for (const word of words) {
-      // Kata terlalu panjang? Pecah per karakter
+      // Word too long for the line? Break it character by character.
       if (ctx.measureText(word).width > maxW) {
         if (cur) { out.push(cur); cur = ""; }
         let part = "";
@@ -81,14 +96,34 @@ function drawCover(ctx, img, x, y, w, h) {
 }
 
 // Cheap blur via scale-down + scale-up
-function drawBlur(ctx, img, x, y, w, h) {
-  const factor = 20;
+function drawBlur(ctx, img, x, y, w, h, factor = 20) {
   const sw = Math.max(4, Math.round(w / factor));
   const sh = Math.max(4, Math.round(h / factor));
   const tmp = createCanvas(sw, sh);
   drawCover(tmp.getContext("2d"), img, 0, 0, sw, sh);
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(tmp, 0, 0, sw, sh, x, y, w, h);
+}
+
+// Subtle film-grain noise — breaks up flat gradients so the canvas
+// doesn't look like a plain CSS background.
+function drawNoise(ctx, x, y, w, h, opacity = 0.035) {
+  const n = createCanvas(96, 96);
+  const nctx = n.getContext("2d");
+  const imgData = nctx.createImageData(96, 96);
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    const v = Math.floor(Math.random() * 255);
+    imgData.data[i] = v;
+    imgData.data[i + 1] = v;
+    imgData.data[i + 2] = v;
+    imgData.data[i + 3] = 255;
+  }
+  nctx.putImageData(imgData, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.globalCompositeOperation = "overlay";
+  ctx.drawImage(n, 0, 0, 96, 96, x, y, w, h);
+  ctx.restore();
 }
 
 async function drawAvatar(ctx, img, cx, cy, r) {
@@ -101,9 +136,9 @@ async function drawAvatar(ctx, img, cx, cy, r) {
   } else {
     // Elegant fallback: gradient silhouette
     const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-    g.addColorStop(0, "#2e2e3a"); g.addColorStop(1, "#1a1a24");
+    g.addColorStop(0, "#34354a"); g.addColorStop(1, "#1a1a24");
     ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fillStyle = "rgba(255,255,255,0.20)";
     ctx.beginPath(); ctx.arc(cx, cy - r * 0.1, r * 0.36, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.62, r * 0.48, r * 0.30, 0, 0, Math.PI * 2); ctx.fill();
   }
@@ -111,15 +146,15 @@ async function drawAvatar(ctx, img, cx, cy, r) {
 }
 
 // ── ICONS (hairline, refined) ──────────────────────────────────────────────
-function icoHeart(ctx, cx, cy, s, filled, color) {
+function icoHeart(ctx, cx, cy, s, color, filled) {
   ctx.save();
   ctx.strokeStyle = color; ctx.fillStyle = color;
-  ctx.lineWidth = s * 0.14; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.lineWidth = s * 0.15; ctx.lineJoin = "round"; ctx.lineCap = "round";
   const top = cy - s * 0.28;
   ctx.beginPath();
-  ctx.moveTo(cx, cy + s * 0.6);
+  ctx.moveTo(cx, cy + s * 0.62);
   ctx.bezierCurveTo(cx - s, cy - s * 0.1, cx - s * 0.5, top - s * 0.5, cx, top + s * 0.08);
-  ctx.bezierCurveTo(cx + s * 0.5, top - s * 0.5, cx + s, cy - s * 0.1, cx, cy + s * 0.6);
+  ctx.bezierCurveTo(cx + s * 0.5, top - s * 0.5, cx + s, cy - s * 0.1, cx, cy + s * 0.62);
   ctx.closePath();
   filled ? ctx.fill() : ctx.stroke();
   ctx.restore();
@@ -128,7 +163,7 @@ function icoHeart(ctx, cx, cy, s, filled, color) {
 function icoComment(ctx, cx, cy, s, color) {
   ctx.save();
   ctx.strokeStyle = color; ctx.fillStyle = color;
-  ctx.lineWidth = s * 0.13; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.lineWidth = s * 0.14; ctx.lineJoin = "round"; ctx.lineCap = "round";
   const w = s * 1.65, h = s * 1.3;
   const x = cx - w / 2, y = cy - h / 2 - s * 0.06;
   rr(ctx, x, y, w, h, s * 0.42);
@@ -143,10 +178,9 @@ function icoComment(ctx, cx, cy, s, color) {
 
 function icoRepost(ctx, cx, cy, s, color) {
   ctx.save();
-  ctx.strokeStyle = color; ctx.lineWidth = s * 0.14;
+  ctx.strokeStyle = color; ctx.lineWidth = s * 0.15;
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   const w = s * 1.4, h = s * 1.0;
-  // top arrow
   ctx.beginPath();
   ctx.moveTo(cx - w/2 + s*0.3, cy - h*0.6);
   ctx.lineTo(cx + w/2, cy - h*0.6);
@@ -157,7 +191,6 @@ function icoRepost(ctx, cx, cy, s, color) {
   ctx.lineTo(cx + w/2, cy - h*0.6);
   ctx.lineTo(cx + w/2 - s*0.4, cy - h*0.6 + s*0.35);
   ctx.stroke();
-  // bottom arrow
   ctx.beginPath();
   ctx.moveTo(cx + w/2 - s*0.3, cy + h*0.6);
   ctx.lineTo(cx - w/2, cy + h*0.6);
@@ -174,8 +207,7 @@ function icoRepost(ctx, cx, cy, s, color) {
 function icoShare(ctx, cx, cy, s, color) {
   ctx.save();
   ctx.strokeStyle = color; ctx.fillStyle = color;
-  ctx.lineWidth = s * 0.13; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  // arrow up
+  ctx.lineWidth = s * 0.14; ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath();
   ctx.moveTo(cx, cy - s * 0.9);
   ctx.lineTo(cx, cy + s * 0.4);
@@ -185,7 +217,6 @@ function icoShare(ctx, cx, cy, s, color) {
   ctx.lineTo(cx, cy - s * 0.9);
   ctx.lineTo(cx + s * 0.5, cy - s * 0.38);
   ctx.stroke();
-  // base tray
   ctx.beginPath();
   ctx.moveTo(cx - s * 0.78, cy + s * 0.1);
   ctx.lineTo(cx - s * 0.78, cy + s * 0.9);
@@ -198,7 +229,7 @@ function icoShare(ctx, cx, cy, s, color) {
 function icoReport(ctx, cx, cy, s, color) {
   ctx.save();
   ctx.strokeStyle = color; ctx.fillStyle = color;
-  ctx.lineWidth = s * 0.14; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.lineWidth = s * 0.15; ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath(); ctx.arc(cx, cy, s * 0.88, 0, Math.PI * 2); ctx.stroke();
   ctx.beginPath();
   ctx.moveTo(cx, cy - s * 0.42); ctx.lineTo(cx, cy + s * 0.1); ctx.stroke();
@@ -206,8 +237,25 @@ function icoReport(ctx, cx, cy, s, color) {
   ctx.restore();
 }
 
-const ICON_FNS = { like: icoHeart, comment: icoComment, repost: icoRepost, share: icoShare, report: icoReport };
+const ICON_FNS    = { like: icoHeart, comment: icoComment, repost: icoRepost, share: icoShare, report: icoReport };
 const ICON_LABELS = { like: "Suka", comment: "Komentar", repost: "Teruskan", share: "Bagikan", report: "Laporkan" };
+
+// ── COLOR HELPERS ────────────────────────────────────────────────────────
+function hexToRgb(hex) {
+  hex = hex.replace("#", "");
+  if (hex.length === 3) hex = hex.split("").map(c => c + c).join("");
+  const num = parseInt(hex.slice(0, 6), 16);
+  return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+}
+function rgba(hex, a) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function lighten(hex, amt) {
+  const { r, g, b } = hexToRgb(hex);
+  const l = (c) => Math.min(255, Math.round(c + (255 - c) * amt));
+  return `rgb(${l(r)},${l(g)},${l(b)})`;
+}
 
 // ── MAIN HANDLER ───────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
@@ -218,7 +266,7 @@ module.exports = async (req, res) => {
   try {
     let {
       avatar      = "",
-      accentColor = "#818cf8",   // indigo-400 — ring avatar
+      accentColor = "#818cf8",   // indigo-400 — avatar ring + ambient glow
       media       = "",
       background  = "",
       username    = "",
@@ -227,26 +275,26 @@ module.exports = async (req, res) => {
       liked       = "false",
       menu        = "like,comment,repost,share,report",
       likes       = "", comments = "", reposts = "", shares = "",
-      progress    = "2",         // story segment aktif (0-based)
-      segments    = "5",         // total segmen progress bar
-      caption     = "",          // teks caption di tengah bawah card
+      progress    = "2",         // active story segment (0-based)
+      segments    = "5",         // total progress segments
+      caption     = "",          // caption text over the bottom of the card
     } = req.query || {};
 
     if (!/^#[0-9A-F]{3,8}$/i.test(accentColor)) accentColor = "#818cf8";
-    const isLiked = String(liked).toLowerCase() === "true";
+    const isLiked  = String(liked).toLowerCase() === "true";
     const menuKeys = String(menu).split(",").map(s => s.trim().toLowerCase()).filter(k => ICON_FNS[k]);
-    const counts = { like: likes, comment: comments, repost: reposts, share: shares };
-    const activeSegment  = Math.max(0, parseInt(progress)  || 2);
-    const totalSegments  = Math.max(1, parseInt(segments)  || 5);
+    const counts   = { like: likes, comment: comments, repost: reposts, share: shares };
+    const activeSegment = Math.max(0, parseInt(progress) || 2);
+    const totalSegments = Math.max(1, parseInt(segments) || 5);
+    const accentLight = lighten(accentColor, 0.35);
 
     // ── Canvas ─────────────────────────────────────────────────────────────
     const W     = 420;
     const SCALE = 2;
-    // Layout heights (logical)
-    const CARD_H      = 560;    // story card (tall portrait)
+    const CARD_H      = 560;
     const BELOW_GAP   = 18;
-    const MENU_ROW_H  = 52;
-    const MENU_PAD_Y  = 14;
+    const MENU_ROW_H  = 54;
+    const MENU_PAD_Y  = 12;
     const MENU_H      = menuKeys.length ? MENU_PAD_Y * 2 + menuKeys.length * MENU_ROW_H : 0;
     const CANVAS_PAD  = 24;
     const H = CANVAS_PAD + CARD_H + BELOW_GAP + MENU_H + CANVAS_PAD;
@@ -254,36 +302,54 @@ module.exports = async (req, res) => {
     const canvas = createCanvas(W * SCALE, H * SCALE);
     const ctx    = canvas.getContext("2d");
     ctx.scale(SCALE, SCALE);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
-    // ── 1. Canvas background — deep dark void ──────────────────────────────
+    // ── 1. Canvas background — soft, layered ambience ──────────────────────
     const bgImg = await loadSafe(background);
     if (bgImg) {
-      drawBlur(ctx, bgImg, 0, 0, W, H);
-      ctx.fillStyle = "rgba(0,0,0,0.62)";
+      drawBlur(ctx, bgImg, 0, 0, W, H, 24);
+      ctx.fillStyle = "rgba(6,6,10,0.66)";
       ctx.fillRect(0, 0, W, H);
     } else {
-      // Subtle radial: not pure black, not gradient cliché
-      ctx.fillStyle = "#0d0d12";
+      // Base: near-black, very slightly warm/cool depending on accent
+      ctx.fillStyle = "#0a0a0f";
       ctx.fillRect(0, 0, W, H);
-      // Faint ambient glow from accent
-      const glow = ctx.createRadialGradient(W * 0.5, CANVAS_PAD + CARD_H * 0.5, 0, W * 0.5, CANVAS_PAD + CARD_H * 0.5, W * 0.8);
-      glow.addColorStop(0, accentColor + "12");
-      glow.addColorStop(1, "transparent");
-      ctx.fillStyle = glow;
+
+      // Two soft ambient glows for depth (top-left accent, bottom-right counter-glow)
+      const glow1 = ctx.createRadialGradient(W * 0.18, CARD_H * 0.15, 0, W * 0.18, CARD_H * 0.15, W * 1.1);
+      glow1.addColorStop(0, rgba(accentColor, 0.16));
+      glow1.addColorStop(1, "transparent");
+      ctx.fillStyle = glow1;
+      ctx.fillRect(0, 0, W, H);
+
+      const glow2 = ctx.createRadialGradient(W * 0.85, CARD_H * 0.9, 0, W * 0.85, CARD_H * 0.9, W * 0.95);
+      glow2.addColorStop(0, "rgba(255,255,255,0.05)");
+      glow2.addColorStop(1, "transparent");
+      ctx.fillStyle = glow2;
       ctx.fillRect(0, 0, W, H);
     }
+    drawNoise(ctx, 0, 0, W, H, 0.025);
 
     // ── 2. Story card ──────────────────────────────────────────────────────
     const CARD_X = CANVAS_PAD;
     const CARD_Y = CANVAS_PAD;
     const CARD_W = W - CANVAS_PAD * 2;
-    const CARD_R = 22;
+    const CARD_R = 24;
 
-    // Drop shadow under card
+    // Drop shadow — two passes for a softer, more natural falloff
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.7)";
-    ctx.shadowBlur  = 48;
-    ctx.shadowOffsetY = 16;
+    ctx.shadowColor = "rgba(0,0,0,0.55)";
+    ctx.shadowBlur  = 60;
+    ctx.shadowOffsetY = 26;
+    ctx.fillStyle = "#000";
+    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur  = 18;
+    ctx.shadowOffsetY = 6;
     ctx.fillStyle = "#000";
     rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
     ctx.fill();
@@ -299,46 +365,59 @@ module.exports = async (req, res) => {
     if (mediaImg) {
       drawCover(ctx, mediaImg, CARD_X, CARD_Y, CARD_W, CARD_H);
     } else {
-      // Placeholder: dark gradient with faint noise texture
+      // Placeholder: refined dark gradient, anchored to accent color
       const ph = ctx.createLinearGradient(CARD_X, CARD_Y, CARD_X + CARD_W, CARD_Y + CARD_H);
-      ph.addColorStop(0, "#1a1a2e");
-      ph.addColorStop(0.5, "#16213e");
-      ph.addColorStop(1, "#0f3460");
+      ph.addColorStop(0,   "#15151f");
+      ph.addColorStop(0.55, rgba(accentColor, 0.22));
+      ph.addColorStop(1,   "#0c0c14");
       ctx.fillStyle = ph;
       ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
-      // Subtle center glow
+
       const cg = ctx.createRadialGradient(
-        CARD_X + CARD_W / 2, CARD_Y + CARD_H * 0.45, 0,
-        CARD_X + CARD_W / 2, CARD_Y + CARD_H * 0.45, CARD_W * 0.55
+        CARD_X + CARD_W / 2, CARD_Y + CARD_H * 0.42, 0,
+        CARD_X + CARD_W / 2, CARD_Y + CARD_H * 0.42, CARD_W * 0.6
       );
-      cg.addColorStop(0, accentColor + "28");
+      cg.addColorStop(0, rgba(accentColor, 0.30));
       cg.addColorStop(1, "transparent");
       ctx.fillStyle = cg;
       ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
+
+      drawNoise(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 0.05);
     }
 
-    // Vignette: top fade (untuk progress bar readability)
-    const vigTop = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + CARD_H * 0.28);
-    vigTop.addColorStop(0, "rgba(0,0,0,0.72)");
+    // Vignette: top fade (progress bar / mute icon readability)
+    const vigTop = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + CARD_H * 0.26);
+    vigTop.addColorStop(0, "rgba(0,0,0,0.65)");
     vigTop.addColorStop(1, "transparent");
     ctx.fillStyle = vigTop;
-    ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H * 0.28);
+    ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H * 0.26);
 
-    // Vignette: bottom fade (untuk overlay teks)
-    const vigBot = ctx.createLinearGradient(0, CARD_Y + CARD_H * 0.52, 0, CARD_Y + CARD_H);
-    vigBot.addColorStop(0, "transparent");
-    vigBot.addColorStop(1, "rgba(0,0,0,0.88)");
+    // Vignette: bottom fade (text overlay readability) — slightly taller & softer curve
+    const vigBot = ctx.createLinearGradient(0, CARD_Y + CARD_H * 0.46, 0, CARD_Y + CARD_H);
+    vigBot.addColorStop(0,    "transparent");
+    vigBot.addColorStop(0.55, "rgba(0,0,0,0.40)");
+    vigBot.addColorStop(1,    "rgba(0,0,0,0.86)");
     ctx.fillStyle = vigBot;
     ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
 
     ctx.restore(); // end card clip
 
-    // Thin card border — glass edge
+    // Glass edge: outer hairline + inner top highlight (gives the card a subtle "lit from above" feel)
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.10)";
     ctx.lineWidth   = 1;
-    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
+    rr(ctx, CARD_X + 0.5, CARD_Y + 0.5, CARD_W - 1, CARD_H - 1, CARD_R);
     ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
+    ctx.clip();
+    const topHighlight = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + 90);
+    topHighlight.addColorStop(0, "rgba(255,255,255,0.10)");
+    topHighlight.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = topHighlight;
+    ctx.fillRect(CARD_X, CARD_Y, CARD_W, 90);
     ctx.restore();
 
     // ── 3. Progress bars (top of card) ─────────────────────────────────────
@@ -351,24 +430,26 @@ module.exports = async (req, res) => {
 
     for (let i = 0; i < totalSegments; i++) {
       const sx = PB_SIDE + i * (segW + PB_GAP);
-      ctx.save();
+
       // Track
-      ctx.fillStyle = "rgba(255,255,255,0.22)";
+      ctx.fillStyle = "rgba(255,255,255,0.24)";
       rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2);
       ctx.fill();
+
       // Fill
       if (i < activeSegment) {
-        // fully completed
         ctx.fillStyle = "#ffffff";
         rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2);
         ctx.fill();
       } else if (i === activeSegment) {
-        // aktif: ~55% terisi
+        ctx.save();
+        ctx.shadowColor = "rgba(255,255,255,0.7)";
+        ctx.shadowBlur = 4;
         ctx.fillStyle = "#ffffff";
         rr(ctx, sx, PB_TOP, segW * 0.55, PB_H, PB_H / 2);
         ctx.fill();
+        ctx.restore();
       }
-      ctx.restore();
     }
 
     // ── 4. Avatar + username overlay (bottom of card) ──────────────────────
@@ -377,13 +458,22 @@ module.exports = async (req, res) => {
     const AV_CY = CARD_Y + CARD_H - 52;
     const avatarImg = await loadSafe(avatar);
 
-    // Avatar ring — accent glow
+    // Avatar ring — gradient ring + soft glow + thin dark gap (story-style)
     ctx.save();
-    ctx.shadowColor = accentColor + "bb";
-    ctx.shadowBlur  = 14;
-    ctx.strokeStyle = accentColor;
+    ctx.shadowColor = rgba(accentColor, 0.55);
+    ctx.shadowBlur  = 16;
+    const ringGrad = ctx.createLinearGradient(AV_CX - AV_R, AV_CY - AV_R, AV_CX + AV_R, AV_CY + AV_R);
+    ringGrad.addColorStop(0, accentLight);
+    ringGrad.addColorStop(1, accentColor);
+    ctx.strokeStyle = ringGrad;
     ctx.lineWidth   = 2.5;
-    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 3, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 4, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    // Dark gap between ring and avatar image for separation
+    ctx.save();
+    ctx.strokeStyle = "rgba(10,10,14,0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 2, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
 
     await drawAvatar(ctx, avatarImg, AV_CX, AV_CY, AV_R);
@@ -392,26 +482,30 @@ module.exports = async (req, res) => {
     if (username) {
       const maxDispLen = 22;
       const dn = username.length > maxDispLen ? username.slice(0, maxDispLen - 1) + "…" : username;
-      const TX = AV_CX + AV_R + 13;
+      const TX = AV_CX + AV_R + 14;
       const TY_name = AV_CY - 8;
-      const TY_sub  = AV_CY + 11;
+      const TY_sub  = AV_CY + 12;
 
-      ctx.font = FB(15);
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.5)";
+      ctx.shadowBlur = 8;
+      ctx.font = FB(15.5);
       ctx.fillStyle = "#ffffff";
       ctx.fillText(dn, TX, TY_name);
+      ctx.restore();
 
       if (handle || timeAgo) {
         const sub = [handle ? `@${handle}` : "", timeAgo].filter(Boolean).join("  ·  ");
         ctx.font = FN(12);
-        ctx.fillStyle = "rgba(255,255,255,0.58)";
+        ctx.fillStyle = "rgba(255,255,255,0.62)";
         ctx.fillText(sub, TX, TY_sub);
       }
     }
 
-    // ── 4b. Caption — clean text overlay, no box ──────────────────────────────
+    // ── 4b. Caption — clean text overlay, no box ────────────────────────────
     if (caption && caption.trim()) {
       const CAP_FONT_SZ = 15;
-      const CAP_LH      = 22;
+      const CAP_LH      = 22.5;
       const CAP_MAX_W   = CARD_W - 56;
       const CAP_X       = CARD_X + 20;
 
@@ -419,19 +513,17 @@ module.exports = async (req, res) => {
       const capLines = wrapText(ctx, caption.trim(), CAP_MAX_W).slice(0, 4);
       const capTotalH = capLines.length * CAP_LH;
 
-      // Bottom of last line sits 14px above avatar top
-      const capBaseY  = AV_CY - AV_R - 14;
+      const capBaseY  = AV_CY - AV_R - 15;
       const capStartY = capBaseY - capTotalH + CAP_LH;
 
       ctx.save();
       ctx.font         = FN(CAP_FONT_SZ);
       ctx.textAlign    = "left";
       ctx.textBaseline = "alphabetic";
-      ctx.fillStyle    = "rgba(255,255,255,0.95)";
+      ctx.fillStyle    = "rgba(255,255,255,0.96)";
 
       for (let i = 0; i < capLines.length; i++) {
         const ly = capStartY + i * CAP_LH;
-        // Two-pass shadow for crisp readability on any photo
         ctx.shadowColor   = "rgba(0,0,0,0.80)";
         ctx.shadowBlur    = 14;
         ctx.shadowOffsetY = 1;
@@ -443,16 +535,18 @@ module.exports = async (req, res) => {
       ctx.restore();
     }
 
-    // Mute icon (top-right in card)
-    const MUTE_X = CARD_X + CARD_W - 48;
-    const MUTE_Y = CARD_Y + 14;
-    const MUTE_R = 18;
+    // Mute icon — glass pill, top-right
+    const MUTE_R = 17;
+    const MUTE_CX = CARD_X + CARD_W - 14 - MUTE_R;
+    const MUTE_CY = CARD_Y + 14 + MUTE_R;
     ctx.save();
-    ctx.fillStyle = "rgba(0,0,0,0.38)";
-    ctx.beginPath(); ctx.arc(MUTE_X, MUTE_Y + MUTE_R, MUTE_R, 0, Math.PI * 2); ctx.fill();
-    // Speaker icon (mute)
-    ctx.strokeStyle = "rgba(255,255,255,0.80)"; ctx.lineWidth = 1.6; ctx.lineCap = "round";
-    const mx = MUTE_X - 5, my = MUTE_Y + MUTE_R;
+    ctx.fillStyle = "rgba(20,20,28,0.42)";
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(MUTE_CX, MUTE_CY, MUTE_R, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 1.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    const mx = MUTE_CX - 4.5, my = MUTE_CY;
     ctx.beginPath();
     ctx.moveTo(mx - 5, my - 3); ctx.lineTo(mx, my - 3);
     ctx.lineTo(mx + 5, my - 7); ctx.lineTo(mx + 5, my + 7);
@@ -466,79 +560,78 @@ module.exports = async (req, res) => {
       const MENU_X = CARD_X;
       const MENU_W = CARD_W;
       const MENU_Y = CARD_Y + CARD_H + BELOW_GAP;
-      const MENU_R = 18;
-      const ICON_S = 11;
-      const LABEL_SIZE = 14;
+      const MENU_R = 20;
+      const ICON_S = 11.5;
+      const LABEL_SIZE = 14.5;
       const COUNT_SIZE = 13;
-      const ICON_CX = MENU_X + 22 + ICON_S;
+      const ICON_CX = MENU_X + 24 + ICON_S;
 
-      // Glass panel
+      // Glass panel base
       ctx.save();
-      ctx.fillStyle = "rgba(18,18,26,0.92)";
-      ctx.shadowColor = "rgba(0,0,0,0.6)";
-      ctx.shadowBlur  = 28;
-      ctx.shadowOffsetY = 8;
+      ctx.fillStyle = "rgba(16,16,23,0.90)";
+      ctx.shadowColor = "rgba(0,0,0,0.55)";
+      ctx.shadowBlur  = 32;
+      ctx.shadowOffsetY = 10;
       rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R);
       ctx.fill();
       ctx.restore();
 
+      // Subtle top sheen across the whole panel (clipped)
+      ctx.save();
+      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R);
+      ctx.clip();
+      const sheen = ctx.createLinearGradient(0, MENU_Y, 0, MENU_Y + 40);
+      sheen.addColorStop(0, "rgba(255,255,255,0.06)");
+      sheen.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = sheen;
+      ctx.fillRect(MENU_X, MENU_Y, MENU_W, 40);
+
+      // Active "like" row tint, drawn inside the same clip so corners stay clean
+      const likeIdx = menuKeys.indexOf("like");
+      if (likeIdx !== -1 && isLiked) {
+        const rowY = MENU_Y + MENU_PAD_Y + likeIdx * MENU_ROW_H;
+        ctx.fillStyle = "rgba(248,113,113,0.07)";
+        ctx.fillRect(MENU_X, rowY, MENU_W, MENU_ROW_H);
+      }
+      ctx.restore();
+
       // Glass border
       ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.07)";
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
       ctx.lineWidth = 1;
-      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R);
+      rr(ctx, MENU_X + 0.5, MENU_Y + 0.5, MENU_W - 1, MENU_H - 1, MENU_R);
       ctx.stroke();
       ctx.restore();
 
       for (let i = 0; i < menuKeys.length; i++) {
         const key    = menuKeys[i];
         const isRep  = key === "report";
-        const color  = isLiked && key === "like" ? "#f87171" : isRep ? "#f87171" : "#f5f5f7";
+        const color  = isLiked && key === "like" ? "#fb7185" : isRep ? "#fb7185" : "#f5f5f7";
         const rowY   = MENU_Y + MENU_PAD_Y + i * MENU_ROW_H;
         const rowCY  = rowY + MENU_ROW_H / 2;
 
-        // Divider (not first row)
         if (i > 0) {
-          ctx.fillStyle = "rgba(255,255,255,0.055)";
-          ctx.fillRect(MENU_X + 16, rowY, MENU_W - 32, 1);
+          ctx.fillStyle = "rgba(255,255,255,0.06)";
+          ctx.fillRect(MENU_X + 20, rowY, MENU_W - 40, 1);
         }
 
-        // Active like row: subtle tinted background
-        if (key === "like" && isLiked) {
-          ctx.save();
-          ctx.fillStyle = "rgba(239,68,68,0.08)";
-          if (i === 0) {
-            rr(ctx, MENU_X + 1, rowY, MENU_W - 2, MENU_ROW_H, MENU_R);
-          } else if (i === menuKeys.length - 1) {
-            ctx.fillRect(MENU_X + 1, rowY, MENU_W - 2, MENU_ROW_H);
-            // bottom corners rounded
-          } else {
-            ctx.fillRect(MENU_X + 1, rowY, MENU_W - 2, MENU_ROW_H);
-          }
-          ctx.fill();
-          ctx.restore();
-        }
-
-        // Icon
         ICON_FNS[key](ctx, ICON_CX, rowCY, ICON_S, color, key === "like" && isLiked);
 
-        // Label
-        ctx.font = FN(LABEL_SIZE);
+        ctx.font = FSB(LABEL_SIZE);
         ctx.fillStyle = color;
         ctx.textBaseline = "middle";
-        const LABEL_X = ICON_CX + ICON_S * 2.1;
-        ctx.fillText(ICON_LABELS[key], LABEL_X, rowCY);
+        const LABEL_X = ICON_CX + ICON_S * 2.15;
+        ctx.fillText(ICON_LABELS[key], LABEL_X, rowCY + 0.5);
         ctx.textBaseline = "alphabetic";
 
-        // Count (right-aligned)
         const cnt = counts[key];
         if (cnt !== "" && cnt !== undefined && !isNaN(parseInt(cnt))) {
           const countStr = fmt(parseInt(cnt));
           ctx.font = FN(COUNT_SIZE);
-          ctx.fillStyle = isRep ? "#f87171" : "rgba(255,255,255,0.38)";
+          ctx.fillStyle = isRep ? "#fb7185" : "rgba(255,255,255,0.40)";
           ctx.textBaseline = "middle";
           const cw = ctx.measureText(countStr).width;
-          ctx.fillText(countStr, MENU_X + MENU_W - 22 - cw, rowCY);
+          ctx.fillText(countStr, MENU_X + MENU_W - 24 - cw, rowCY + 0.5);
           ctx.textBaseline = "alphabetic";
         }
       }
