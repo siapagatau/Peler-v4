@@ -396,47 +396,39 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── 4b. Caption — emoji di-strip karena @napi-rs/canvas tidak support CBDT color emoji ──
+    // ── 4b. Caption — pakai captionFont seperti iqc (tanpa stripping emoji) ──
     if (caption && caption.trim()) {
       const CAP_FONT_SZ = 15;
       const CAP_LH      = 22.5;
       const CAP_MAX_W   = CARD_W - 56;
       const CAP_X       = CARD_X + 20;
 
-      // Strip semua emoji & karakter non-renderable sebelum dirender
-      // @napi-rs/canvas tidak support color bitmap font (CBDT/CBLC) di NotoColorEmoji
-      const stripEmoji = (str) => str
-        .replace(/\p{Emoji_Presentation}/gu, "")
-        .replace(/\p{Extended_Pictographic}/gu, "")
-        .replace(/[\uFE00-\uFE0F]/gu, "")   // variation selectors
-        .replace(/\u200D/g, "")              // zero-width joiner
-        .replace(/[^\x00-\xFF\u0100-\u024F\u1E00-\u1EFF]/g, "") // hanya Latin
-        .replace(/  +/g, " ")                // collapse double spaces
-        .trim();
+      // Ganti literal \n dari query ke newline asli, seperti di iqc
+      const rawCaption = caption.replace(/\\n/g, "\n").trim();
+      if (rawCaption) {
+        ctx.font = captionFont(CAP_FONT_SZ);
+        const capLines = wrapText(ctx, rawCaption, CAP_MAX_W).slice(0, 4);
+        const capTotalH = capLines.length * CAP_LH;
+        const capBaseY  = AV_CY - AV_R - 15;
+        const capStartY = capBaseY - capTotalH + CAP_LH;
 
-      const capClean  = stripEmoji(caption.trim());
-      if (capClean) {
+        ctx.save();
+        ctx.font = captionFont(CAP_FONT_SZ);
+        ctx.textAlign    = "left";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle    = "rgba(255,255,255,0.96)";
 
-      ctx.font = captionFont(CAP_FONT_SZ);
-      const capLines = wrapText(ctx, capClean, CAP_MAX_W).slice(0, 4);
-      const capTotalH = capLines.length * CAP_LH;
-      const capBaseY  = AV_CY - AV_R - 15;
-      const capStartY = capBaseY - capTotalH + CAP_LH;
-
-      ctx.save();
-      ctx.font = captionFont(CAP_FONT_SZ);
-      ctx.textAlign    = "left";
-      ctx.textBaseline = "alphabetic";
-      ctx.fillStyle    = "rgba(255,255,255,0.96)";
-      for (let i = 0; i < capLines.length; i++) {
-        const ly = capStartY + i * CAP_LH;
-        ctx.shadowColor = "rgba(0,0,0,0.80)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 1;
-        ctx.fillText(capLines[i], CAP_X, ly);
-        ctx.shadowBlur = 4;
-        ctx.fillText(capLines[i], CAP_X, ly);
+        for (let i = 0; i < capLines.length; i++) {
+          const ly = capStartY + i * CAP_LH;
+          ctx.shadowColor = "rgba(0,0,0,0.80)";
+          ctx.shadowBlur  = 14;
+          ctx.shadowOffsetY = 1;
+          ctx.fillText(capLines[i], CAP_X, ly);
+          ctx.shadowBlur = 4;
+          ctx.fillText(capLines[i], CAP_X, ly);
+        }
+        ctx.restore();
       }
-      ctx.restore();
-      } // end if capClean
     }
 
     // ── Mute icon — posisi di bawah progress bar ──────────────────────────
