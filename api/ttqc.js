@@ -13,542 +13,487 @@ try {
   } catch (_) {}
 } catch (e) { console.log("FONT ERROR:", e.message); }
 
-function chatFont(size, weight = "normal") {
-  const family = hasEmojiFont ? "'Inter','NotoColorEmoji'" : "Inter";
-  return `${weight} ${size}px ${family}`;
-}
-function boldFont(size) {
-  const family = hasEmojiFont ? "'InterBold','NotoColorEmoji'" : "InterBold";
-  return `bold ${size}px ${family}`;
+function cf(size, bold = false) {
+  const fam = hasEmojiFont
+    ? (bold ? "'InterBold','NotoColorEmoji'" : "'Inter','NotoColorEmoji'")
+    : (bold ? "InterBold" : "Inter");
+  return `${bold ? "bold" : "normal"} ${size}px ${fam}`;
 }
 
 // ── HELPERS ──────────────────────────────────────────────────
-function rr(ctx, x, y, w, h, r, fill, stroke) {
+function rr(ctx, x, y, w, h, r) {
   r = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
   ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);   ctx.quadraticCurveTo(x + w, y,     x + w, y + r);
-  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);   ctx.quadraticCurveTo(x,     y + h, x,     y + h - r);
-  ctx.lineTo(x, y + r);       ctx.quadraticCurveTo(x,     y,     x + r, y);
+  ctx.lineTo(x + w - r, y);     ctx.quadraticCurveTo(x+w, y,   x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);       ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);         ctx.quadraticCurveTo(x, y+h,   x, y+h-r);
+  ctx.lineTo(x, y+r);           ctx.quadraticCurveTo(x, y,     x+r, y);
   ctx.closePath();
-  if (fill)  ctx.fill();
-  if (stroke) ctx.stroke();
 }
 
-// Rounded rect with only specific corners
-function rrCustom(ctx, x, y, w, h, tl, tr, br, bl) {
+// Bubble: top-left corner kecil (dekat avatar), sisanya rounded normal
+function bubblePath(ctx, x, y, w, h, r) {
+  const tl = 4, tr = r, br = r, bl = r;
   ctx.beginPath();
   ctx.moveTo(x + tl, y);
-  ctx.lineTo(x + w - tr, y);   ctx.quadraticCurveTo(x + w, y,     x + w, y + tr);
-  ctx.lineTo(x + w, y + h - br); ctx.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
-  ctx.lineTo(x + bl, y + h);   ctx.quadraticCurveTo(x,     y + h, x,     y + h - bl);
-  ctx.lineTo(x, y + tl);       ctx.quadraticCurveTo(x,     y,     x + tl, y);
+  ctx.lineTo(x + w - tr, y);    ctx.quadraticCurveTo(x+w, y,   x+w, y+tr);
+  ctx.lineTo(x+w, y+h-br);      ctx.quadraticCurveTo(x+w, y+h, x+w-br, y+h);
+  ctx.lineTo(x+bl, y+h);        ctx.quadraticCurveTo(x, y+h,   x, y+h-bl);
+  ctx.lineTo(x, y+tl);          ctx.quadraticCurveTo(x, y,     x+tl, y);
   ctx.closePath();
 }
 
-function wrapText(ctx, text, maxWidth) {
-  const hardLines = String(text).split("\n");
-  const result = [];
-  for (const hard of hardLines) {
+function wrapText(ctx, text, maxW) {
+  const out = [];
+  for (const hard of String(text).replace(/\\n/g, "\n").split("\n")) {
     const words = hard.split(" ");
     let cur = "";
-    for (const word of words) {
-      const test = cur ? cur + " " + word : word;
-      if (ctx.measureText(test).width > maxWidth && cur) {
-        result.push(cur);
-        cur = word;
-      } else {
-        cur = test;
-      }
+    for (const w of words) {
+      const t = cur ? cur + " " + w : w;
+      if (ctx.measureText(t).width > maxW && cur) { out.push(cur); cur = w; }
+      else cur = t;
     }
-    result.push(cur);
+    out.push(cur);
   }
-  return result;
+  return out;
 }
 
-async function drawRoundAvatar(ctx, avatarUrl, cx, cy, r) {
+async function drawAvatar(ctx, url, cx, cy, r) {
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.clip();
-
-  let drawn = false;
-  if (avatarUrl) {
-    try {
-      const img = await loadImage(avatarUrl);
-      ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
-      drawn = true;
-    } catch (_) {}
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+  let ok = false;
+  if (url) { try { ctx.drawImage(await loadImage(url), cx-r, cy-r, r*2, r*2); ok = true; } catch(_){} }
+  if (!ok) {
+    // TikTok default grey silhouette
+    ctx.fillStyle = "#c8c8d4"; ctx.fillRect(cx-r, cy-r, r*2, r*2);
+    ctx.fillStyle = "#a0a0b2";
+    ctx.beginPath(); ctx.arc(cx, cy - r*0.1, r*0.38, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx, cy + r*0.62, r*0.52, r*0.36, 0, 0, Math.PI*2); ctx.fill();
   }
-
-  if (!drawn) {
-    ctx.fillStyle = "#c8c8d0";
-    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-    ctx.fillStyle = "#a0a0b0";
-    ctx.beginPath(); ctx.arc(cx, cy - r * 0.1, r * 0.38, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.62, r * 0.52, r * 0.36, 0, 0, Math.PI * 2); ctx.fill();
-  }
-
   ctx.restore();
 }
 
-// ── MAIN HANDLER: type=ttqc ──────────────────────────────────
+// ── MAIN ─────────────────────────────────────────────────────
 /**
  * Query params:
- *   name       - nama pengirim (default: "User")
- *   message    - isi pesan; newline dengan \n (default: "Halo!")
- *   avatar     - URL foto profil (opsional)
- *   theme      - "light" | "dark" (default: "light") — TikTok default terang
- *   verified   - "true" | "false" — tampilkan centang biru TikTok (default: false)
- *   likes      - angka like (default: "")
- *   username   - @username di bawah nama (opsional)
- *   pinned     - "true" | "false" — tampilkan pin badge (default: false)
- *   time       - waktu custom e.g "2h" (default: "now")
+ *   name      - nama pengirim (default: "User")
+ *   message   - isi pesan; gunakan \n untuk newline (default: "Halo!")
+ *   avatar    - URL foto profil
+ *   theme     - "light" | "dark" (default: "light")
+ *   verified  - "true" tampilkan centang biru
+ *   time      - waktu misal "2h" (default: "now")
+ *   likes     - angka like misal "1.2K" (default: kosong)
  *
  * Contoh:
- *   /api/qc?type=ttqc&name=KaaOffc&message=miku+bot+anti+redup&avatar=<url>&verified=true
+ *   /api/qc?type=ttqc&name=KaaOffc&message=miku+bot+anti+redup&avatar=<url>
  */
-async function handleTTQC(req, res) {
-  let {
-    name     = "User",
-    message  = "Halo!",
-    avatar   = "",
-    theme    = "light",
-    verified = "false",
-    likes    = "",
-    username = "",
-    pinned   = "false",
-    time     = "now",
-  } = req.query;
-
-  const isDark     = theme === "dark";
-  const isVerified = verified === "true";
-  const isPinned   = pinned === "true";
-
-  // ── Color palette (TikTok DM light/dark) ──────────────────
-  const BG        = isDark ? "#121212"           : "#f0f0f5";     // overall background
-  const CARD_BG   = isDark ? "#1e1e1e"           : "#ffffff";     // white phone card
-  const TOP_BG    = isDark ? "#1e1e1e"           : "#ffffff";     // header bar
-  const MSG_BG    = isDark ? "#2a2a2a"           : "#ffffff";     // message bubble
-  const TEXT_NAME = isDark ? "#ffffff"           : "#161823";     // sender name
-  const TEXT_MSG  = isDark ? "#e0e0e0"           : "#161823";     // message body
-  const TEXT_SUB  = isDark ? "#888888"           : "#8a8b91";     // subtext (time, username)
-  const DIVIDER   = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
-  const INPUT_BG  = isDark ? "#2a2a2a"           : "#f1f1f2";     // bottom input bar
-  const SEND_CLR  = "#fe2c55";                                    // TikTok red/pink
-
-  // ── Measure message text ───────────────────────────────────
-  const PHONE_W   = 400;
-  const PHONE_H_MIN = 420;
-  const HEADER_H  = 64;
-  const FOOTER_H  = 64;
-  const EMOJI_ROW_H = 52;
-  const MSG_PAD_X = 16;
-  const MSG_PAD_Y = 12;
-  const AVT_R     = 20;
-  const AVT_GAP   = 10;
-  const BUBBLE_MAX_W = PHONE_W - AVT_R * 2 - AVT_GAP * 2 - MSG_PAD_X * 2 - 12;
-  const MSG_SIZE  = 17;
-  const LINE_H    = Math.round(MSG_SIZE * 1.5);
-  const CORNER    = 18;
-
-  const dummy = createCanvas(900, 10);
-  const dc    = dummy.getContext("2d");
-  dc.font     = chatFont(MSG_SIZE);
-  const msgRaw   = message.replace(/\\n/g, "\n");
-  const msgLines = wrapText(dc, msgRaw, BUBBLE_MAX_W - 24);
-  const msgTextW = msgLines.reduce((mx, l) => Math.max(mx, dc.measureText(l).width), 0);
-
-  const bubbleInnerH = MSG_PAD_Y + msgLines.length * LINE_H + MSG_PAD_Y;
-  const bubbleW  = Math.min(BUBBLE_MAX_W, Math.max(msgTextW + 24, 80));
-
-  // Context menu items (like in screenshot)
-  const MENU_ITEMS = ["Balas", "Teruskan", "Salin", "Terjemahkan", "Hapus untuk saya"];
-  const MENU_DANGER = ["Laporkan"];
-  const MENU_ITEM_H = 52;
-  const MENU_W     = PHONE_W - 40;
-  const MENU_H     = (MENU_ITEMS.length + MENU_DANGER.length) * MENU_ITEM_H + 8;
-  const MENU_CORNER = 16;
-
-  // Emoji reaction bar
-  const REACTION_EMOJIS = ["❤️", "😂", "😭", "👍", "😡", "🤔"];
-
-  // Calculate total canvas height
-  const MSG_AREA_H = 56 + bubbleInnerH + 12;        // avatar row + bubble + gap
-  const PHONE_H    = HEADER_H + EMOJI_ROW_H + MSG_AREA_H + MENU_H + FOOTER_H + 16;
-
-  // Outer canvas — slight padding + subtle shadow effect
-  const PAD_OUTER = 40;
-  const CW = PHONE_W + PAD_OUTER * 2;
-  const CH = PHONE_H + PAD_OUTER * 2;
-
-  const canvas = createCanvas(CW, CH);
-  const ctx    = canvas.getContext("2d");
-
-  // ── Outer background ───────────────────────────────────────
-  if (isDark) {
-    ctx.fillStyle = "#0a0a0a";
-  } else {
-    const obg = ctx.createLinearGradient(0, 0, CW, CH);
-    obg.addColorStop(0, "#e8e8f0");
-    obg.addColorStop(1, "#d8d8e8");
-    ctx.fillStyle = obg;
-  }
-  ctx.fillRect(0, 0, CW, CH);
-
-  // ── Phone card (white rounded rect) ───────────────────────
-  const PX = PAD_OUTER, PY = PAD_OUTER;
-  ctx.save();
-  ctx.shadowColor  = isDark ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.18)";
-  ctx.shadowBlur   = 36;
-  ctx.shadowOffsetY = 8;
-  ctx.fillStyle    = CARD_BG;
-  rr(ctx, PX, PY, PHONE_W, PHONE_H, 24, true, false);
-  ctx.restore();
-  // clip phone area
-  ctx.save();
-  rr(ctx, PX, PY, PHONE_W, PHONE_H, 24, true, false);
-  ctx.clip();
-
-  // ── HEADER BAR ─────────────────────────────────────────────
-  ctx.fillStyle = TOP_BG;
-  ctx.fillRect(PX, PY, PHONE_W, HEADER_H);
-
-  // Back arrow
-  const arrX = PX + 16, arrY = PY + HEADER_H / 2;
-  ctx.strokeStyle = isDark ? "#ffffff" : "#161823";
-  ctx.lineWidth   = 2.2;
-  ctx.lineCap     = "round";
-  ctx.lineJoin    = "round";
-  ctx.beginPath();
-  ctx.moveTo(arrX + 10, arrY - 8);
-  ctx.lineTo(arrX,      arrY);
-  ctx.lineTo(arrX + 10, arrY + 8);
-  ctx.stroke();
-
-  // Header avatar
-  const HAV_CX = PX + 52, HAV_CY = PY + HEADER_H / 2, HAV_R = 20;
-  await drawRoundAvatar(ctx, avatar, HAV_CX, HAV_CY, HAV_R);
-
-  // Header name
-  ctx.font      = boldFont(16);
-  ctx.fillStyle = TEXT_NAME;
-  ctx.fillText(name.length > 18 ? name.slice(0,17)+"…" : name, PX + 80, PY + HEADER_H / 2 + 6);
-
-  // Verified badge (blue checkmark circle)
-  if (isVerified) {
-    const vx = PX + 80 + ctx.measureText(name.length > 18 ? name.slice(0,17)+"…" : name).width + 8;
-    const vy = PY + HEADER_H / 2 - 1;
-    ctx.save();
-    ctx.fillStyle = "#20d5ec"; // TikTok blue
-    ctx.beginPath();
-    ctx.arc(vx + 9, vy, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 1.8;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(vx + 5, vy);
-    ctx.lineTo(vx + 8, vy + 3.5);
-    ctx.lineTo(vx + 13, vy - 3.5);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // ··· menu dots
-  const dotsX = PX + PHONE_W - 28, dotsY = PY + HEADER_H / 2;
-  ctx.fillStyle = isDark ? "#ffffff" : "#161823";
-  for (let i = -1; i <= 1; i++) {
-    ctx.beginPath();
-    ctx.arc(dotsX, dotsY + i * 6, 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Header divider
-  ctx.fillStyle = DIVIDER;
-  ctx.fillRect(PX, PY + HEADER_H, PHONE_W, 1);
-
-  // ── BLURRED BACKGROUND MESSAGES (decorative) ──────────────
-  let curY = PY + HEADER_H + 8;
-
-  // Some ghost message bubbles behind (blurred, for atmosphere like screenshot)
-  const ghostBubbles = [
-    { right: true, w: 160, h: 32, y: curY + 6 },
-    { right: false, w: 200, h: 32, y: curY + 14 },
-    { right: true, w: 120, h: 32, y: curY + 52 },
-  ];
-  for (const gb of ghostBubbles) {
-    ctx.save();
-    ctx.globalAlpha = isDark ? 0.18 : 0.13;
-    ctx.fillStyle = isDark ? "#555" : "#c0c0d0";
-    const gx = gb.right ? PX + PHONE_W - gb.w - 16 : PX + 52;
-    rr(ctx, gx, gb.y, gb.w, gb.h, 16, true, false);
-    ctx.restore();
-  }
-
-  curY += 88;
-
-  // ── EMOJI REACTION BAR ─────────────────────────────────────
-  const REAC_Y = curY;
-  ctx.save();
-  ctx.shadowColor  = isDark ? "rgba(0,0,0,0.4)" : "rgba(0,0,0,0.1)";
-  ctx.shadowBlur   = 12;
-  ctx.shadowOffsetY = 3;
-  ctx.fillStyle    = isDark ? "#2e2e2e" : "#ffffff";
-  rr(ctx, PX + 12, REAC_Y, PHONE_W - 24, EMOJI_ROW_H - 6, 24, true, false);
-  ctx.restore();
-
-  const emojiSpacing = (PHONE_W - 24) / REACTION_EMOJIS.length;
-  for (let i = 0; i < REACTION_EMOJIS.length; i++) {
-    ctx.font = `${28}px ${hasEmojiFont ? "NotoColorEmoji" : "sans-serif"}`;
-    ctx.textAlign = "center";
-    ctx.fillStyle = TEXT_MSG;
-    ctx.fillText(
-      REACTION_EMOJIS[i],
-      PX + 12 + emojiSpacing * i + emojiSpacing / 2,
-      REAC_Y + EMOJI_ROW_H / 2 + 9
-    );
-  }
-  ctx.textAlign = "left";
-  curY += EMOJI_ROW_H + 4;
-
-  // ── QUOTED MESSAGE (main bubble) ──────────────────────────
-  const MSG_Y   = curY;
-  const AVT_CX  = PX + MSG_PAD_X + AVT_R;
-  const AVT_CY  = MSG_Y + AVT_R + 8;
-
-  // Avatar
-  await drawRoundAvatar(ctx, avatar, AVT_CX, AVT_CY, AVT_R);
-
-  // Message bubble
-  const BX = AVT_CX + AVT_R + AVT_GAP;
-  const BY = MSG_Y;
-  ctx.save();
-  ctx.shadowColor  = isDark ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0.06)";
-  ctx.shadowBlur   = 8;
-  ctx.shadowOffsetY = 2;
-  ctx.fillStyle    = MSG_BG;
-  // TikTok bubble: top-left corner flat (near avatar), others rounded
-  rrCustom(ctx, BX, BY, bubbleW, bubbleInnerH, 4, CORNER, CORNER, CORNER);
-  ctx.fill();
-  ctx.restore();
-
-  // Message text
-  let ty = BY + MSG_PAD_Y + MSG_SIZE;
-  ctx.font      = chatFont(MSG_SIZE);
-  ctx.fillStyle = TEXT_MSG;
-  for (const line of msgLines) {
-    ctx.fillText(line, BX + 12, ty);
-    ty += LINE_H;
-  }
-
-  // Pinned badge
-  if (isPinned) {
-    ctx.save();
-    ctx.fillStyle = isDark ? "#333" : "#f0f0f5";
-    rr(ctx, BX + bubbleW - 60, BY + 6, 54, 22, 11, true, false);
-    ctx.fillStyle = isDark ? "#aaa" : "#8a8b91";
-    ctx.font = chatFont(11);
-    ctx.fillText("📌 pinned", BX + bubbleW - 57, BY + 20);
-    ctx.restore();
-  }
-
-  curY += bubbleInnerH + 8;
-
-  // Time + reactions row
-  ctx.font      = chatFont(12);
-  ctx.fillStyle = TEXT_SUB;
-  ctx.fillText(time, BX, curY + 12);
-  if (likes) {
-    ctx.fillText(`❤️ ${likes}`, BX + 44, curY + 12);
-  }
-  curY += 20;
-
-  // ── CONTEXT MENU ──────────────────────────────────────────
-  const MENU_X = PX + 20;
-  const MENU_Y = curY + 6;
-
-  ctx.save();
-  ctx.shadowColor  = isDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.12)";
-  ctx.shadowBlur   = 20;
-  ctx.shadowOffsetY = 4;
-  ctx.fillStyle    = isDark ? "#2a2a2a" : "#ffffff";
-  rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_CORNER, true, false);
-  ctx.restore();
-
-  // Menu items
-  const ICON_CLR  = isDark ? "#cccccc" : "#444444";
-  const ITEM_TXT  = isDark ? "#ffffff" : "#161823";
-  const ITEM_DANGER_CLR = "#fe2c55";
-
-  // Icon draw helpers
-  function drawReplyIcon(cx, cy) {
-    ctx.save();
-    ctx.strokeStyle = ICON_CLR; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(cx + 12, cy - 6);
-    ctx.lineTo(cx + 2, cy);
-    ctx.lineTo(cx + 12, cy + 6);
-    ctx.moveTo(cx + 2, cy);
-    ctx.quadraticCurveTo(cx + 10, cy, cx + 10, cy - 5);
-    ctx.stroke();
-    ctx.restore();
-  }
-  function drawForwardIcon(cx, cy) {
-    ctx.save();
-    ctx.strokeStyle = ICON_CLR; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 6);
-    ctx.lineTo(cx + 10, cy);
-    ctx.lineTo(cx, cy + 6);
-    ctx.moveTo(cx + 10, cy);
-    ctx.quadraticCurveTo(cx + 2, cy, cx + 2, cy - 5);
-    ctx.stroke();
-    ctx.restore();
-  }
-  function drawCopyIcon(cx, cy) {
-    ctx.save();
-    ctx.strokeStyle = ICON_CLR; ctx.lineWidth = 1.8; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    rr(ctx, cx, cy - 7, 9, 10, 2, false, true);
-    rr(ctx, cx + 3, cy - 10, 9, 10, 2, false, true);
-    ctx.restore();
-  }
-  function drawTranslateIcon(cx, cy) {
-    ctx.save();
-    ctx.strokeStyle = ICON_CLR; ctx.lineWidth = 1.8; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 6); ctx.lineTo(cx + 12, cy - 6);
-    ctx.moveTo(cx + 6, cy - 6); ctx.lineTo(cx + 6, cy - 2);
-    ctx.moveTo(cx + 2, cy - 2); ctx.lineTo(cx + 10, cy - 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx + 4, cy - 2); ctx.lineTo(cx + 8, cy + 6);
-    ctx.moveTo(cx + 10, cy - 2); ctx.lineTo(cx + 6, cy + 6);
-    ctx.moveTo(cx + 5, cy + 2); ctx.lineTo(cx + 9, cy + 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-  function drawTrashIcon(cx, cy, danger) {
-    ctx.save();
-    ctx.strokeStyle = danger ? ITEM_DANGER_CLR : ICON_CLR;
-    ctx.lineWidth = 1.8; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    rr(ctx, cx + 2, cy - 5, 9, 10, 1, false, true);
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 5); ctx.lineTo(cx + 13, cy - 5);
-    ctx.moveTo(cx + 4, cy - 5); ctx.lineTo(cx + 4, cy - 8);
-    ctx.lineTo(cx + 9, cy - 8); ctx.lineTo(cx + 9, cy - 5);
-    ctx.stroke();
-    ctx.restore();
-  }
-  function drawFlagIcon(cx, cy) {
-    ctx.save();
-    ctx.strokeStyle = ITEM_DANGER_CLR; ctx.lineWidth = 1.8; ctx.lineCap = "round";
-    ctx.fillStyle   = ITEM_DANGER_CLR;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 7); ctx.lineTo(cx, cy + 7);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - 7); ctx.lineTo(cx + 11, cy - 3); ctx.lineTo(cx, cy + 1);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-  }
-
-  const iconDrawers = [drawReplyIcon, drawForwardIcon, drawCopyIcon, drawTranslateIcon, drawTrashIcon];
-  const allItems = [...MENU_ITEMS.map((t,i) => ({text:t, danger:false, draw:iconDrawers[i]})),
-                    ...MENU_DANGER.map(t => ({text:t, danger:true, draw:drawFlagIcon}))];
-
-  for (let i = 0; i < allItems.length; i++) {
-    const item = allItems[i];
-    const iy = MENU_Y + i * MENU_ITEM_H;
-
-    // Divider (not first)
-    if (i > 0) {
-      ctx.fillStyle = DIVIDER;
-      ctx.fillRect(MENU_X + 16, iy, MENU_W - 32, 1);
-    }
-
-    // Icon
-    const ICX = MENU_X + 24, ICY = iy + MENU_ITEM_H / 2;
-    item.draw(ICX, ICY, item.danger);
-
-    // Label
-    ctx.font      = chatFont(17);
-    ctx.fillStyle = item.danger ? ITEM_DANGER_CLR : ITEM_TXT;
-    ctx.fillText(item.text, MENU_X + 52, iy + MENU_ITEM_H / 2 + 6);
-  }
-
-  curY = MENU_Y + MENU_H + 8;
-
-  // ── FOOTER INPUT BAR ───────────────────────────────────────
-  const FOOT_Y = PY + PHONE_H - FOOTER_H;
-  ctx.fillStyle = isDark ? "#1e1e1e" : "#ffffff";
-  ctx.fillRect(PX, FOOT_Y, PHONE_W, FOOTER_H);
-  ctx.fillStyle = DIVIDER;
-  ctx.fillRect(PX, FOOT_Y, PHONE_W, 1);
-
-  // Camera icon
-  const CAM_X = PX + 14, CAM_Y = FOOT_Y + FOOTER_H / 2;
-  ctx.strokeStyle = isDark ? "#aaa" : "#555";
-  ctx.lineWidth = 1.8; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  rr(ctx, CAM_X, CAM_Y - 9, 24, 18, 4, false, true);
-  ctx.beginPath(); ctx.arc(CAM_X + 12, CAM_Y - 1, 5, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(CAM_X + 19, CAM_Y - 7); ctx.lineTo(CAM_X + 22, CAM_Y - 10); ctx.stroke();
-
-  // Input box
-  ctx.save();
-  ctx.fillStyle = INPUT_BG;
-  rr(ctx, PX + 46, FOOT_Y + 10, PHONE_W - 100, FOOTER_H - 20, 22, true, false);
-  ctx.restore();
-  ctx.font      = chatFont(15);
-  ctx.fillStyle = isDark ? "#555" : "#aaa";
-  ctx.fillText("Kirim pesan...", PX + 62, FOOT_Y + FOOTER_H / 2 + 5);
-
-  // Emoji + mic icons
-  const rightIcons = [PX + PHONE_W - 50, PX + PHONE_W - 22];
-  // Emoji sticker icon
-  ctx.strokeStyle = isDark ? "#aaa" : "#555";
-  ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  ctx.arc(rightIcons[0] - 6, FOOT_Y + FOOTER_H / 2, 10, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = isDark ? "#aaa" : "#555";
-  ctx.beginPath(); ctx.arc(rightIcons[0] - 9, FOOT_Y + FOOTER_H / 2 - 2, 1.5, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(rightIcons[0] - 3, FOOT_Y + FOOTER_H / 2 - 2, 1.5, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath();
-  ctx.arc(rightIcons[0] - 6, FOOT_Y + FOOTER_H / 2 + 1, 4, 0, Math.PI, false);
-  ctx.stroke();
-
-  // Mic icon
-  ctx.strokeStyle = isDark ? "#aaa" : "#555";
-  ctx.lineWidth = 1.8; ctx.lineCap = "round";
-  rr(ctx, rightIcons[1] - 4, FOOT_Y + FOOTER_H / 2 - 9, 8, 10, 4, false, true);
-  ctx.beginPath();
-  ctx.arc(rightIcons[1], FOOT_Y + FOOTER_H / 2 + 4, 5, Math.PI, 0, false);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(rightIcons[1], FOOT_Y + FOOTER_H / 2 + 9);
-  ctx.lineTo(rightIcons[1], FOOT_Y + FOOTER_H / 2 + 13);
-  ctx.stroke();
-
-  // Reaction row at very bottom (TikTok style)
-  // Already handled via emoji bar above
-
-  ctx.restore(); // end clip
-
-  res.setHeader("Content-Type", "image/png");
-  res.send(canvas.toBuffer("image/png"));
-}
-
-// ── ENTRY POINT ───────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET")     return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    return await handleTTQC(req, res);
+    let {
+      name     = "User",
+      message  = "Halo!",
+      avatar   = "",
+      theme    = "light",
+      verified = "false",
+      time     = "now",
+      likes    = "",
+    } = req.query;
+
+    const isDark     = theme === "dark";
+    const isVerified = verified === "true";
+
+    // ── Palette ───────────────────────────────────────────────
+    // Outer background — lavender seperti screenshot
+    const BG_OUTER   = isDark ? "#0f0f14" : "#e8e8f2";
+    // Card putih
+    const CARD_BG    = isDark ? "#1c1c22" : "#ffffff";
+    // Header
+    const HDR_BG     = isDark ? "#1c1c22" : "#ffffff";
+    const HDR_TEXT   = isDark ? "#ffffff" : "#111111";
+    const HDR_ICON   = isDark ? "#cccccc" : "#333333";
+    // Emoji bar
+    const EBAR_BG    = isDark ? "#2a2a35" : "#ffffff";
+    // Bubble pesan
+    const BUBBLE_BG  = isDark ? "#2e2e3a" : "#ffffff";
+    const BUBBLE_TXT = isDark ? "#e8e8e8" : "#111111";
+    // Timestamp
+    const TIME_TXT   = isDark ? "#666677" : "#888899";
+    // Context menu
+    const MENU_BG    = isDark ? "#232330" : "#ffffff";
+    const MENU_TXT   = isDark ? "#e0e0e0" : "#111111";
+    const MENU_DIV   = isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)";
+    const MENU_ICON  = isDark ? "#aaaaaa" : "#444444";
+    const DANGER_CLR = "#fe2c55";
+    // Input bar
+    const FOOT_BG    = isDark ? "#1c1c22" : "#ffffff";
+    const INPUT_BG   = isDark ? "#2a2a35" : "#f1f1f4";
+    const INPUT_PH   = isDark ? "#555566" : "#aaaaaa";
+
+    // ── Dimensions ────────────────────────────────────────────
+    // Mengikuti proporsi screenshot: lebar ~480px (2x scale dari 240px content)
+    const SCALE    = 2;          // render 2x lalu kirim langsung (no downscale, terlihat tajam)
+    const CW_CSS   = 300;        // lebar card dalam "css pixels"
+    const CW       = CW_CSS * SCALE;
+
+    const CARD_RX   = 20 * SCALE;   // card corner radius
+    const OUTER_PAD = 22 * SCALE;   // padding luar (lavender border)
+
+    // Header
+    const HDR_H    = 56 * SCALE;
+    const AVT_R    = 18 * SCALE;    // radius avatar header
+
+    // Ghost bubbles area
+    const GHOST_H  = 68 * SCALE;
+
+    // Emoji bar
+    const EBAR_H   = 52 * SCALE;
+    const EBAR_MX  = 0;             // margin x (rata kiri card)
+    const EBAR_R   = 24 * SCALE;
+
+    // Message area
+    const MSG_AVT_R   = 20 * SCALE;
+    const MSG_AVT_GAP = 8 * SCALE;
+    const BUBBLE_R    = 16 * SCALE;
+    const BUBBLE_PADX = 14 * SCALE;
+    const BUBBLE_PADY = 10 * SCALE;
+    const MSG_SIZE    = 15 * SCALE;
+    const LINE_H      = Math.round(MSG_SIZE * 1.5);
+    const MAX_BUB_W   = (CW_CSS - 20 - MSG_AVT_R/SCALE*2 - MSG_AVT_GAP/SCALE - 16) * SCALE;
+
+    // Measure bubble
+    const dummy  = createCanvas(2000, 10);
+    const dc     = dummy.getContext("2d");
+    dc.font      = cf(MSG_SIZE);
+    const msgLines = wrapText(dc, message, MAX_BUB_W - BUBBLE_PADX * 2);
+    const msgTextW = msgLines.reduce((mx, l) => Math.max(mx, dc.measureText(l).width), 0);
+    const bubW     = Math.max(msgTextW + BUBBLE_PADX * 2, 60 * SCALE);
+    const bubH     = BUBBLE_PADY + msgLines.length * LINE_H + BUBBLE_PADY;
+
+    const MSG_AREA_H = Math.max(MSG_AVT_R * 2, bubH) + 6 * SCALE;
+    const TIME_H     = 20 * SCALE;
+
+    // Context menu
+    const MENU_ITEMS = [
+      { label: "Balas",          icon: "reply",     danger: false },
+      { label: "Teruskan",       icon: "forward",   danger: false },
+      { label: "Salin",          icon: "copy",      danger: false },
+      { label: "Terjemahkan",    icon: "translate", danger: false },
+      { label: "Hapus untuk saya", icon: "trash",   danger: false },
+      { label: "Laporkan",       icon: "flag",      danger: true  },
+    ];
+    const ITEM_H   = 52 * SCALE;
+    const MENU_H   = MENU_ITEMS.length * ITEM_H;
+    const MENU_R   = 14 * SCALE;
+
+    // Footer
+    const FOOT_H   = 56 * SCALE;
+
+    // Total card height
+    const CARD_H = HDR_H + GHOST_H + EBAR_H + (8 * SCALE) + MSG_AREA_H + TIME_H + (8 * SCALE) + MENU_H + (8 * SCALE) + FOOT_H;
+
+    // Total canvas
+    const TOT_W = CW + OUTER_PAD * 2;
+    const TOT_H = CARD_H + OUTER_PAD * 2;
+
+    const canvas = createCanvas(TOT_W, TOT_H);
+    const ctx    = canvas.getContext("2d");
+
+    // ── Outer background ──────────────────────────────────────
+    ctx.fillStyle = BG_OUTER;
+    ctx.fillRect(0, 0, TOT_W, TOT_H);
+
+    // ── Card ─────────────────────────────────────────────────
+    const CX = OUTER_PAD, CY = OUTER_PAD;
+
+    ctx.save();
+    ctx.shadowColor   = isDark ? "rgba(0,0,0,0.7)" : "rgba(100,100,140,0.18)";
+    ctx.shadowBlur    = 28 * SCALE;
+    ctx.shadowOffsetY = 6 * SCALE;
+    ctx.fillStyle = CARD_BG;
+    rr(ctx, CX, CY, CW, CARD_H, CARD_RX);
+    ctx.fill();
+    ctx.restore();
+
+    // Clip to card
+    ctx.save();
+    rr(ctx, CX, CY, CW, CARD_H, CARD_RX);
+    ctx.clip();
+
+    let Y = CY; // running Y cursor
+
+    // ── HEADER ───────────────────────────────────────────────
+    ctx.fillStyle = HDR_BG;
+    ctx.fillRect(CX, Y, CW, HDR_H);
+
+    // Back arrow <
+    const ARX = CX + 16 * SCALE, ARY = Y + HDR_H / 2;
+    ctx.strokeStyle = HDR_ICON; ctx.lineWidth = 1.8 * SCALE;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(ARX + 8 * SCALE, ARY - 7 * SCALE);
+    ctx.lineTo(ARX,             ARY);
+    ctx.lineTo(ARX + 8 * SCALE, ARY + 7 * SCALE);
+    ctx.stroke();
+
+    // Avatar header
+    const HAX = CX + 40 * SCALE, HAY = Y + HDR_H / 2;
+    await drawAvatar(ctx, avatar, HAX, HAY, AVT_R);
+
+    // Name
+    ctx.font      = cf(15 * SCALE, true);
+    ctx.fillStyle = HDR_TEXT;
+    const nameDisp = name.length > 16 ? name.slice(0,15)+"…" : name;
+    ctx.fillText(nameDisp, HAX + AVT_R + 10 * SCALE, Y + HDR_H / 2 + 5 * SCALE);
+
+    // Verified badge
+    if (isVerified) {
+      const vbx = HAX + AVT_R + 10 * SCALE + ctx.measureText(nameDisp).width + 6 * SCALE;
+      const vby = Y + HDR_H / 2;
+      ctx.save();
+      ctx.fillStyle = "#20d5ec";
+      ctx.beginPath(); ctx.arc(vbx + 8 * SCALE, vby, 8 * SCALE, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.6 * SCALE; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(vbx + 4 * SCALE,  vby);
+      ctx.lineTo(vbx + 7 * SCALE,  vby + 3 * SCALE);
+      ctx.lineTo(vbx + 12 * SCALE, vby - 3.5 * SCALE);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ··· dots (vertical)
+    const DTX = CX + CW - 18 * SCALE, DTY = Y + HDR_H / 2;
+    ctx.fillStyle = HDR_ICON;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath(); ctx.arc(DTX, DTY + i * 5 * SCALE, 2 * SCALE, 0, Math.PI*2); ctx.fill();
+    }
+
+    // Header bottom divider
+    ctx.fillStyle = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)";
+    ctx.fillRect(CX, Y + HDR_H - 1, CW, 1);
+
+    Y += HDR_H;
+
+    // ── GHOST BUBBLES ─────────────────────────────────────────
+    // Tiga bubble abu blur (seperti pesan sebelumnya yang tidak terbaca)
+    const ghosts = [
+      { x: CX + CW - 170 * SCALE, w: 145 * SCALE, h: 26 * SCALE, y: Y + 10 * SCALE, right: true },
+      { x: CX + 10 * SCALE,       w: 185 * SCALE, h: 26 * SCALE, y: Y + 14 * SCALE, right: false },
+      { x: CX + CW - 140 * SCALE, w: 115 * SCALE, h: 26 * SCALE, y: Y + 50 * SCALE, right: true },
+    ];
+    for (const g of ghosts) {
+      ctx.save();
+      ctx.globalAlpha = isDark ? 0.2 : 0.25;
+      ctx.fillStyle   = isDark ? "#555577" : "#c8c8d8";
+      rr(ctx, g.x, g.y, g.w, g.h, 13 * SCALE); ctx.fill();
+      ctx.restore();
+    }
+    Y += GHOST_H;
+
+    // ── EMOJI REACTION BAR ────────────────────────────────────
+    const EBAR_X = CX + 0;
+    const EBAR_Y = Y;
+    const EBAR_W = CW - 0;
+
+    ctx.save();
+    ctx.shadowColor  = isDark ? "rgba(0,0,0,0.3)" : "rgba(100,100,140,0.12)";
+    ctx.shadowBlur   = 10 * SCALE; ctx.shadowOffsetY = 3 * SCALE;
+    ctx.fillStyle = EBAR_BG;
+    rr(ctx, EBAR_X, EBAR_Y, EBAR_W, EBAR_H, EBAR_R); ctx.fill();
+    ctx.restore();
+
+    const EMOJIS = ["❤️","😂","😭","👍","😡","🤔"];
+    const eSlot  = EBAR_W / EMOJIS.length;
+    ctx.font     = hasEmojiFont
+      ? `${28 * SCALE}px NotoColorEmoji`
+      : `${28 * SCALE}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i < EMOJIS.length; i++) {
+      ctx.fillText(EMOJIS[i], EBAR_X + eSlot * i + eSlot / 2, EBAR_Y + EBAR_H / 2);
+    }
+    ctx.textAlign    = "left";
+    ctx.textBaseline = "alphabetic";
+    Y += EBAR_H + 8 * SCALE;
+
+    // ── MESSAGE ROW ───────────────────────────────────────────
+    const MSG_Y  = Y;
+    const AVMX   = CX + 10 * SCALE;
+    const AVMY   = MSG_Y + MSG_AVT_R;
+
+    await drawAvatar(ctx, avatar, AVMX + MSG_AVT_R, AVMY, MSG_AVT_R);
+
+    const BUB_X = AVMX + MSG_AVT_R * 2 + MSG_AVT_GAP;
+    const BUB_Y = MSG_Y;
+
+    ctx.save();
+    ctx.shadowColor  = isDark ? "rgba(0,0,0,0.25)" : "rgba(100,100,140,0.1)";
+    ctx.shadowBlur   = 6 * SCALE; ctx.shadowOffsetY = 2 * SCALE;
+    ctx.fillStyle = BUBBLE_BG;
+    bubblePath(ctx, BUB_X, BUB_Y, bubW, bubH, BUBBLE_R); ctx.fill();
+    ctx.restore();
+
+    ctx.font      = cf(MSG_SIZE);
+    ctx.fillStyle = BUBBLE_TXT;
+    let ty = BUB_Y + BUBBLE_PADY + MSG_SIZE;
+    for (const line of msgLines) {
+      ctx.fillText(line, BUB_X + BUBBLE_PADX, ty);
+      ty += LINE_H;
+    }
+
+    Y += Math.max(MSG_AVT_R * 2, bubH) + 6 * SCALE;
+
+    // Timestamp
+    ctx.font      = cf(11 * SCALE);
+    ctx.fillStyle = TIME_TXT;
+    const timeStr = likes ? `${time}  ❤️ ${likes}` : time;
+    ctx.fillText(timeStr, AVMX, Y + 13 * SCALE);
+    Y += TIME_H + 8 * SCALE;
+
+    // ── CONTEXT MENU ─────────────────────────────────────────
+    const MX = CX + 0;
+    const MY = Y;
+    const MW = CW;
+
+    ctx.save();
+    ctx.shadowColor  = isDark ? "rgba(0,0,0,0.4)" : "rgba(100,100,140,0.14)";
+    ctx.shadowBlur   = 16 * SCALE; ctx.shadowOffsetY = 4 * SCALE;
+    ctx.fillStyle = MENU_BG;
+    rr(ctx, MX, MY, MW, MENU_H, MENU_R); ctx.fill();
+    ctx.restore();
+
+    for (let i = 0; i < MENU_ITEMS.length; i++) {
+      const item = MENU_ITEMS[i];
+      const IY   = MY + i * ITEM_H;
+      const ICX  = MX + 22 * SCALE;
+      const ICY  = IY + ITEM_H / 2;
+      const IC   = item.danger ? DANGER_CLR : MENU_ICON;
+
+      // Divider
+      if (i > 0) {
+        ctx.fillStyle = MENU_DIV;
+        ctx.fillRect(MX + 16 * SCALE, IY, MW - 32 * SCALE, 1);
+      }
+
+      // Icons
+      ctx.strokeStyle = IC; ctx.fillStyle = IC;
+      ctx.lineWidth = 1.7 * SCALE; ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+      const S = SCALE; // shorthand
+      if (item.icon === "reply") {
+        // < arrow (back)
+        ctx.beginPath();
+        ctx.moveTo(ICX + 9*S, ICY - 6*S); ctx.lineTo(ICX, ICY); ctx.lineTo(ICX + 9*S, ICY + 6*S);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ICX, ICY);
+        ctx.quadraticCurveTo(ICX + 8*S, ICY, ICX + 8*S, ICY - 5*S);
+        ctx.stroke();
+      } else if (item.icon === "forward") {
+        // > arrow
+        ctx.beginPath();
+        ctx.moveTo(ICX, ICY - 6*S); ctx.lineTo(ICX + 9*S, ICY); ctx.lineTo(ICX, ICY + 6*S);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ICX + 9*S, ICY);
+        ctx.quadraticCurveTo(ICX + 1*S, ICY, ICX + 1*S, ICY - 5*S);
+        ctx.stroke();
+      } else if (item.icon === "copy") {
+        // two overlapping rects
+        ctx.strokeRect(ICX + 2*S, ICY - 7*S, 8*S, 9*S);
+        ctx.strokeRect(ICX, ICY - 10*S, 8*S, 9*S);
+      } else if (item.icon === "translate") {
+        // simplified translate symbol (like screenshot ≜)
+        ctx.beginPath();
+        ctx.moveTo(ICX, ICY - 7*S); ctx.lineTo(ICX + 11*S, ICY - 7*S);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ICX + 5*S, ICY - 7*S); ctx.lineTo(ICX + 5*S, ICY - 2*S);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ICX + 2*S, ICY - 2*S); ctx.lineTo(ICX + 8*S, ICY - 2*S);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ICX + 3*S, ICY - 2*S); ctx.lineTo(ICX + 6*S, ICY + 5*S);
+        ctx.moveTo(ICX + 9*S, ICY - 2*S); ctx.lineTo(ICX + 6*S, ICY + 5*S);
+        ctx.stroke();
+      } else if (item.icon === "trash") {
+        // trash can
+        ctx.beginPath();
+        ctx.moveTo(ICX, ICY - 5*S); ctx.lineTo(ICX + 11*S, ICY - 5*S); ctx.stroke();
+        ctx.strokeRect(ICX + 2*S, ICY - 5*S, 8*S, 10*S);
+        ctx.beginPath();
+        ctx.moveTo(ICX + 4*S, ICY - 5*S); ctx.lineTo(ICX + 4*S, ICY - 8*S);
+        ctx.lineTo(ICX + 8*S, ICY - 8*S); ctx.lineTo(ICX + 8*S, ICY - 5*S); ctx.stroke();
+      } else if (item.icon === "flag") {
+        ctx.fillStyle = IC;
+        ctx.beginPath();
+        ctx.moveTo(ICX, ICY - 8*S);
+        ctx.lineTo(ICX + 11*S, ICY - 3*S);
+        ctx.lineTo(ICX, ICY + 2*S);
+        ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(ICX, ICY - 8*S); ctx.lineTo(ICX, ICY + 8*S); ctx.stroke();
+      }
+
+      // Label
+      ctx.font      = cf(15 * SCALE);
+      ctx.fillStyle = item.danger ? DANGER_CLR : MENU_TXT;
+      ctx.fillText(item.label, MX + 48 * SCALE, IY + ITEM_H / 2 + 5 * SCALE);
+    }
+
+    Y += MENU_H + 8 * SCALE;
+
+    // ── FOOTER ───────────────────────────────────────────────
+    const FY = Y;
+    ctx.fillStyle = FOOT_BG;
+    ctx.fillRect(CX, FY, CW, FOOT_H);
+    ctx.fillStyle = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.07)";
+    ctx.fillRect(CX, FY, CW, 1);
+
+    // Camera icon
+    const CAX = CX + 14 * SCALE, CAY = FY + FOOT_H / 2;
+    ctx.strokeStyle = isDark ? "#888" : "#555"; ctx.lineWidth = 1.7 * SCALE; ctx.lineCap = "round";
+    // body
+    rr(ctx, CAX, CAY - 9*SCALE, 22*SCALE, 16*SCALE, 4*SCALE); ctx.stroke();
+    // lens
+    ctx.beginPath(); ctx.arc(CAX + 11*SCALE, CAY - 1*SCALE, 5*SCALE, 0, Math.PI*2); ctx.stroke();
+    // top bump
+    ctx.beginPath(); ctx.moveTo(CAX + 17*SCALE, CAY - 9*SCALE); ctx.lineTo(CAX + 20*SCALE, CAY - 12*SCALE); ctx.stroke();
+
+    // Input box
+    ctx.save();
+    ctx.fillStyle = INPUT_BG;
+    rr(ctx, CX + 44*SCALE, FY + 11*SCALE, CW - 88*SCALE, FOOT_H - 22*SCALE, 20*SCALE); ctx.fill();
+    ctx.restore();
+    ctx.font      = cf(13 * SCALE);
+    ctx.fillStyle = INPUT_PH;
+    ctx.fillText("Kirim pesan...", CX + 58*SCALE, FY + FOOT_H/2 + 5*SCALE);
+
+    // Right icons (emoji sticker + mic)
+    const R1X = CX + CW - 40*SCALE, R2X = CX + CW - 16*SCALE;
+    ctx.strokeStyle = isDark ? "#888" : "#555"; ctx.lineWidth = 1.7*SCALE;
+    // emoji face
+    ctx.beginPath(); ctx.arc(R1X, FY + FOOT_H/2, 9*SCALE, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = isDark ? "#888" : "#555";
+    ctx.beginPath(); ctx.arc(R1X - 3*SCALE, FY + FOOT_H/2 - 2*SCALE, 1.5*SCALE, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(R1X + 3*SCALE, FY + FOOT_H/2 - 2*SCALE, 1.5*SCALE, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(R1X, FY + FOOT_H/2 + 1*SCALE, 4*SCALE, 0, Math.PI, false); ctx.stroke();
+    // mic
+    rr(ctx, R2X - 4*SCALE, FY + FOOT_H/2 - 9*SCALE, 8*SCALE, 10*SCALE, 4*SCALE); ctx.stroke();
+    ctx.beginPath(); ctx.arc(R2X, FY + FOOT_H/2 + 3*SCALE, 6*SCALE, Math.PI, 0, false); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(R2X, FY + FOOT_H/2 + 9*SCALE); ctx.lineTo(R2X, FY + FOOT_H/2 + 13*SCALE); ctx.stroke();
+
+    ctx.restore(); // end card clip
+
+    res.setHeader("Content-Type", "image/png");
+    res.send(canvas.toBuffer("image/png"));
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
