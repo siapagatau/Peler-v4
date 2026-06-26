@@ -346,8 +346,8 @@ module.exports = async (req, res) => {
     await drawRoundAvatar(ctx, avatar, AV_CX, AV_CY, AV_R);
 
     // ── Username + verified badge ──────────────────────────
-    const FONT_NAME = Math.round(AV_R * 0.70);   // font lebih besar proporsional
-    const textX = AV_CX + AV_R + Math.round(AV_R * 0.40);
+    const FONT_NAME = Math.round(AV_R * 0.70);
+    const textX = AV_CX + AV_R + Math.round(AV_R * 0.75);  // jarak lebih lapang dari avatar
     const textY = AV_CY;
 
     if (username) {
