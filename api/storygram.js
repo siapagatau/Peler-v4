@@ -17,11 +17,10 @@ try {
   } catch (_) {}
 } catch (e) { console.log("FONT ERROR:", e.message); }
 
-const FN  = (sz) => `normal ${sz}px ${hasEmoji ? "'Inter','NotoColorEmoji'" : "Inter,sans-serif"}`;
-const FB  = (sz) => `bold ${sz}px ${hasEmoji ? "'InterBold','NotoColorEmoji'" : "InterBold,sans-serif"}`;
-const FSB = (sz) => `600 ${sz}px ${hasEmoji ? "'InterSemiBold','Inter','NotoColorEmoji'" : "InterSemiBold,Inter,sans-serif"}`;
-// FE: emoji-first font stack, sama persis dengan ttqc
-const FE  = (sz) => `${sz}px ${hasEmoji ? "'NotoColorEmoji',sans-serif" : "sans-serif"}`;
+// Font helpers — NotoColorEmoji sebagai fallback di stack, persis pola qc.js
+function FN(sz)  { return `normal ${sz}px ${hasEmoji ? "'Inter','NotoColorEmoji'" : "Inter,sans-serif"}`; }
+function FB(sz)  { return `bold ${sz}px ${hasEmoji ? "'InterBold','NotoColorEmoji'" : "InterBold,sans-serif"}`; }
+function FSB(sz) { return `600 ${sz}px ${hasEmoji ? "'InterSemiBold','Inter','NotoColorEmoji'" : "InterSemiBold,Inter,sans-serif"}`; }
 
 // ── UTILS ──────────────────────────────────────────────────────────────────
 function rr(ctx, x, y, w, h, r) {
@@ -47,8 +46,7 @@ async function loadSafe(url) {
   try { return await loadImage(url); } catch { return null; }
 }
 
-// Wrap teks dengan deteksi emoji — render per-segment supaya font switch benar
-function wrapText(ctx, text, maxW, fontSize) {
+function wrapText(ctx, text, maxW) {
   const out = [];
   for (const hard of String(text).replace(/\\n/g, "\n").split("\n")) {
     const words = hard.split(" ");
@@ -68,81 +66,6 @@ function wrapText(ctx, text, maxW, fontSize) {
       }
       const test = cur ? cur + " " + word : word;
       if (ctx.measureText(test).width > maxW && cur) { out.push(cur); cur = word; }
-      else cur = test;
-    }
-    if (cur) out.push(cur);
-  }
-  return out.filter(l => l.length > 0);
-}
-
-// Render teks dengan emoji support (font switch per-segment, seperti ttqc)
-// Karena @napi-rs/canvas tidak auto-fallback font, kita split teks menjadi
-// segmen "emoji" vs "teks biasa" lalu ganti font per-segmen.
-const EMOJI_RE = /(\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu;
-
-function drawTextWithEmoji(ctx, text, x, y, fontSize, color) {
-  const segments = [];
-  let last = 0;
-  let m;
-  EMOJI_RE.lastIndex = 0;
-  while ((m = EMOJI_RE.exec(text)) !== null) {
-    if (m.index > last) segments.push({ t: text.slice(last, m.index), emoji: false });
-    segments.push({ t: m[0], emoji: true });
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) segments.push({ t: text.slice(last), emoji: false });
-
-  ctx.fillStyle = color;
-  let curX = x;
-  for (const seg of segments) {
-    if (!seg.t) continue;
-    ctx.font = seg.emoji ? FE(fontSize) : FN(fontSize);
-    ctx.fillText(seg.t, curX, y);
-    curX += ctx.measureText(seg.t).width;
-  }
-}
-
-// measureText untuk mixed teks (untuk wrapping)
-function measureMixed(ctx, text, fontSize) {
-  let w = 0;
-  const segments = [];
-  let last = 0;
-  let m;
-  EMOJI_RE.lastIndex = 0;
-  while ((m = EMOJI_RE.exec(text)) !== null) {
-    if (m.index > last) segments.push({ t: text.slice(last, m.index), emoji: false });
-    segments.push({ t: m[0], emoji: true });
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) segments.push({ t: text.slice(last), emoji: false });
-  for (const seg of segments) {
-    ctx.font = seg.emoji ? FE(fontSize) : FN(fontSize);
-    w += ctx.measureText(seg.t).width;
-  }
-  return w;
-}
-
-function wrapTextMixed(ctx, text, maxW, fontSize) {
-  const out = [];
-  for (const hard of String(text).replace(/\\n/g, "\n").split("\n")) {
-    const words = hard.split(" ");
-    let cur = "";
-    for (const word of words) {
-      const ww = measureMixed(ctx, word, fontSize);
-      if (ww > maxW) {
-        if (cur) { out.push(cur); cur = ""; }
-        let part = "";
-        for (const ch of word) {
-          const test = part + ch;
-          if (measureMixed(ctx, test, fontSize) > maxW && part) {
-            out.push(part); part = ch;
-          } else { part = test; }
-        }
-        cur = part;
-        continue;
-      }
-      const test = cur ? cur + " " + word : word;
-      if (measureMixed(ctx, test, fontSize) > maxW && cur) { out.push(cur); cur = word; }
       else cur = test;
     }
     if (cur) out.push(cur);
@@ -238,25 +161,13 @@ function icoRepost(ctx, cx, cy, s, color) {
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   const w = s * 1.4, h = s * 1.0;
   ctx.beginPath();
-  ctx.moveTo(cx - w/2 + s*0.3, cy - h*0.6);
-  ctx.lineTo(cx + w/2, cy - h*0.6);
-  ctx.lineTo(cx + w/2, cy + h*0.12);
-  ctx.stroke();
+  ctx.moveTo(cx - w/2 + s*0.3, cy - h*0.6); ctx.lineTo(cx + w/2, cy - h*0.6); ctx.lineTo(cx + w/2, cy + h*0.12); ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(cx + w/2 - s*0.4, cy - h*0.6 - s*0.35);
-  ctx.lineTo(cx + w/2, cy - h*0.6);
-  ctx.lineTo(cx + w/2 - s*0.4, cy - h*0.6 + s*0.35);
-  ctx.stroke();
+  ctx.moveTo(cx + w/2 - s*0.4, cy - h*0.6 - s*0.35); ctx.lineTo(cx + w/2, cy - h*0.6); ctx.lineTo(cx + w/2 - s*0.4, cy - h*0.6 + s*0.35); ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(cx + w/2 - s*0.3, cy + h*0.6);
-  ctx.lineTo(cx - w/2, cy + h*0.6);
-  ctx.lineTo(cx - w/2, cy - h*0.12);
-  ctx.stroke();
+  ctx.moveTo(cx + w/2 - s*0.3, cy + h*0.6); ctx.lineTo(cx - w/2, cy + h*0.6); ctx.lineTo(cx - w/2, cy - h*0.12); ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(cx - w/2 + s*0.4, cy + h*0.6 - s*0.35);
-  ctx.lineTo(cx - w/2, cy + h*0.6);
-  ctx.lineTo(cx - w/2 + s*0.4, cy + h*0.6 + s*0.35);
-  ctx.stroke();
+  ctx.moveTo(cx - w/2 + s*0.4, cy + h*0.6 - s*0.35); ctx.lineTo(cx - w/2, cy + h*0.6); ctx.lineTo(cx - w/2 + s*0.4, cy + h*0.6 + s*0.35); ctx.stroke();
   ctx.restore();
 }
 
@@ -264,21 +175,9 @@ function icoShare(ctx, cx, cy, s, color) {
   ctx.save();
   ctx.strokeStyle = color; ctx.fillStyle = color;
   ctx.lineWidth = s * 0.14; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - s * 0.9);
-  ctx.lineTo(cx, cy + s * 0.4);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx - s * 0.5, cy - s * 0.38);
-  ctx.lineTo(cx, cy - s * 0.9);
-  ctx.lineTo(cx + s * 0.5, cy - s * 0.38);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx - s * 0.78, cy + s * 0.1);
-  ctx.lineTo(cx - s * 0.78, cy + s * 0.9);
-  ctx.lineTo(cx + s * 0.78, cy + s * 0.9);
-  ctx.lineTo(cx + s * 0.78, cy + s * 0.1);
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.9); ctx.lineTo(cx, cy + s * 0.4); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - s * 0.5, cy - s * 0.38); ctx.lineTo(cx, cy - s * 0.9); ctx.lineTo(cx + s * 0.5, cy - s * 0.38); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - s * 0.78, cy + s * 0.1); ctx.lineTo(cx - s * 0.78, cy + s * 0.9); ctx.lineTo(cx + s * 0.78, cy + s * 0.9); ctx.lineTo(cx + s * 0.78, cy + s * 0.1); ctx.stroke();
   ctx.restore();
 }
 
@@ -287,8 +186,7 @@ function icoReport(ctx, cx, cy, s, color) {
   ctx.strokeStyle = color; ctx.fillStyle = color;
   ctx.lineWidth = s * 0.15; ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath(); ctx.arc(cx, cy, s * 0.88, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - s * 0.42); ctx.lineTo(cx, cy + s * 0.1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.42); ctx.lineTo(cx, cy + s * 0.1); ctx.stroke();
   ctx.beginPath(); ctx.arc(cx, cy + s * 0.44, s * 0.10, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
@@ -370,13 +268,11 @@ module.exports = async (req, res) => {
     } else {
       ctx.fillStyle = "#0a0a0f";
       ctx.fillRect(0, 0, W, H);
-
       const glow1 = ctx.createRadialGradient(W * 0.18, CARD_H * 0.15, 0, W * 0.18, CARD_H * 0.15, W * 1.1);
       glow1.addColorStop(0, rgba(accentColor, 0.16));
       glow1.addColorStop(1, "transparent");
       ctx.fillStyle = glow1;
       ctx.fillRect(0, 0, W, H);
-
       const glow2 = ctx.createRadialGradient(W * 0.85, CARD_H * 0.9, 0, W * 0.85, CARD_H * 0.9, W * 0.95);
       glow2.addColorStop(0, "rgba(255,255,255,0.05)");
       glow2.addColorStop(1, "transparent");
@@ -392,20 +288,14 @@ module.exports = async (req, res) => {
     const CARD_R = 24;
 
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.55)";
-    ctx.shadowBlur  = 60;
-    ctx.shadowOffsetY = 26;
+    ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 60; ctx.shadowOffsetY = 26;
     ctx.fillStyle = "#000";
-    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
-    ctx.fill();
+    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R); ctx.fill();
     ctx.restore();
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur  = 18;
-    ctx.shadowOffsetY = 6;
+    ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
     ctx.fillStyle = "#000";
-    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
-    ctx.fill();
+    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R); ctx.fill();
     ctx.restore();
 
     ctx.save();
@@ -417,85 +307,50 @@ module.exports = async (req, res) => {
       drawCover(ctx, mediaImg, CARD_X, CARD_Y, CARD_W, CARD_H);
     } else {
       const ph = ctx.createLinearGradient(CARD_X, CARD_Y, CARD_X + CARD_W, CARD_Y + CARD_H);
-      ph.addColorStop(0,   "#15151f");
-      ph.addColorStop(0.55, rgba(accentColor, 0.22));
-      ph.addColorStop(1,   "#0c0c14");
-      ctx.fillStyle = ph;
-      ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
-
-      const cg = ctx.createRadialGradient(
-        CARD_X + CARD_W / 2, CARD_Y + CARD_H * 0.42, 0,
-        CARD_X + CARD_W / 2, CARD_Y + CARD_H * 0.42, CARD_W * 0.6
-      );
-      cg.addColorStop(0, rgba(accentColor, 0.30));
-      cg.addColorStop(1, "transparent");
-      ctx.fillStyle = cg;
-      ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
-
+      ph.addColorStop(0, "#15151f"); ph.addColorStop(0.55, rgba(accentColor, 0.22)); ph.addColorStop(1, "#0c0c14");
+      ctx.fillStyle = ph; ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
+      const cg = ctx.createRadialGradient(CARD_X+CARD_W/2, CARD_Y+CARD_H*0.42, 0, CARD_X+CARD_W/2, CARD_Y+CARD_H*0.42, CARD_W*0.6);
+      cg.addColorStop(0, rgba(accentColor, 0.30)); cg.addColorStop(1, "transparent");
+      ctx.fillStyle = cg; ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
       drawNoise(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, 0.05);
     }
 
-    // Vignette top
     const vigTop = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + CARD_H * 0.26);
-    vigTop.addColorStop(0, "rgba(0,0,0,0.65)");
-    vigTop.addColorStop(1, "transparent");
-    ctx.fillStyle = vigTop;
-    ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H * 0.26);
+    vigTop.addColorStop(0, "rgba(0,0,0,0.65)"); vigTop.addColorStop(1, "transparent");
+    ctx.fillStyle = vigTop; ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H * 0.26);
 
-    // Vignette bottom
     const vigBot = ctx.createLinearGradient(0, CARD_Y + CARD_H * 0.46, 0, CARD_Y + CARD_H);
-    vigBot.addColorStop(0,    "transparent");
-    vigBot.addColorStop(0.55, "rgba(0,0,0,0.40)");
-    vigBot.addColorStop(1,    "rgba(0,0,0,0.86)");
-    ctx.fillStyle = vigBot;
-    ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
-
-    ctx.restore();
-
-    // Glass edge
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.10)";
-    ctx.lineWidth   = 1;
-    rr(ctx, CARD_X + 0.5, CARD_Y + 0.5, CARD_W - 1, CARD_H - 1, CARD_R);
-    ctx.stroke();
+    vigBot.addColorStop(0, "transparent"); vigBot.addColorStop(0.55, "rgba(0,0,0,0.40)"); vigBot.addColorStop(1, "rgba(0,0,0,0.86)");
+    ctx.fillStyle = vigBot; ctx.fillRect(CARD_X, CARD_Y, CARD_W, CARD_H);
     ctx.restore();
 
     ctx.save();
-    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R);
-    ctx.clip();
-    const topHighlight = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + 90);
-    topHighlight.addColorStop(0, "rgba(255,255,255,0.10)");
-    topHighlight.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = topHighlight;
-    ctx.fillRect(CARD_X, CARD_Y, CARD_W, 90);
+    ctx.strokeStyle = "rgba(255,255,255,0.10)"; ctx.lineWidth = 1;
+    rr(ctx, CARD_X+0.5, CARD_Y+0.5, CARD_W-1, CARD_H-1, CARD_R); ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    rr(ctx, CARD_X, CARD_Y, CARD_W, CARD_H, CARD_R); ctx.clip();
+    const topHL = ctx.createLinearGradient(0, CARD_Y, 0, CARD_Y + 90);
+    topHL.addColorStop(0, "rgba(255,255,255,0.10)"); topHL.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = topHL; ctx.fillRect(CARD_X, CARD_Y, CARD_W, 90);
     ctx.restore();
 
     // ── 3. Progress bars ──────────────────────────────────────────────────
-    const PB_TOP    = CARD_Y + 16;
-    const PB_H      = 3;
-    const PB_GAP    = 5;
-    const PB_SIDE   = CARD_X + 14;
-    const PB_TOTAL_W = CARD_W - 28;
+    const PB_TOP = CARD_Y + 16, PB_H = 3, PB_GAP = 5;
+    const PB_SIDE = CARD_X + 14, PB_TOTAL_W = CARD_W - 28;
     const segW = (PB_TOTAL_W - PB_GAP * (totalSegments - 1)) / totalSegments;
 
     for (let i = 0; i < totalSegments; i++) {
       const sx = PB_SIDE + i * (segW + PB_GAP);
-
       ctx.fillStyle = "rgba(255,255,255,0.24)";
-      rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2);
-      ctx.fill();
-
+      rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2); ctx.fill();
       if (i < activeSegment) {
         ctx.fillStyle = "#ffffff";
-        rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2);
-        ctx.fill();
+        rr(ctx, sx, PB_TOP, segW, PB_H, PB_H / 2); ctx.fill();
       } else if (i === activeSegment) {
-        ctx.save();
-        ctx.shadowColor = "rgba(255,255,255,0.7)";
-        ctx.shadowBlur = 4;
+        ctx.save(); ctx.shadowColor = "rgba(255,255,255,0.7)"; ctx.shadowBlur = 4;
         ctx.fillStyle = "#ffffff";
-        rr(ctx, sx, PB_TOP, segW * 0.55, PB_H, PB_H / 2);
-        ctx.fill();
+        rr(ctx, sx, PB_TOP, segW * 0.55, PB_H, PB_H / 2); ctx.fill();
         ctx.restore();
       }
     }
@@ -507,18 +362,14 @@ module.exports = async (req, res) => {
     const avatarImg = await loadSafe(avatar);
 
     ctx.save();
-    ctx.shadowColor = rgba(accentColor, 0.55);
-    ctx.shadowBlur  = 16;
-    const ringGrad = ctx.createLinearGradient(AV_CX - AV_R, AV_CY - AV_R, AV_CX + AV_R, AV_CY + AV_R);
-    ringGrad.addColorStop(0, accentLight);
-    ringGrad.addColorStop(1, accentColor);
-    ctx.strokeStyle = ringGrad;
-    ctx.lineWidth   = 2.5;
+    ctx.shadowColor = rgba(accentColor, 0.55); ctx.shadowBlur = 16;
+    const ringGrad = ctx.createLinearGradient(AV_CX-AV_R, AV_CY-AV_R, AV_CX+AV_R, AV_CY+AV_R);
+    ringGrad.addColorStop(0, accentLight); ringGrad.addColorStop(1, accentColor);
+    ctx.strokeStyle = ringGrad; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 4, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
     ctx.save();
-    ctx.strokeStyle = "rgba(10,10,14,0.55)";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(10,10,14,0.55)"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(AV_CX, AV_CY, AV_R + 2, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
 
@@ -528,113 +379,83 @@ module.exports = async (req, res) => {
       const maxDispLen = 22;
       const dn = username.length > maxDispLen ? username.slice(0, maxDispLen - 1) + "…" : username;
       const TX = AV_CX + AV_R + 14;
-      const TY_name = AV_CY - 8;
-      const TY_sub  = AV_CY + 12;
-
       ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.5)";
-      ctx.shadowBlur = 8;
-      ctx.font = FB(15.5);
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(dn, TX, TY_name);
+      ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 8;
+      ctx.font = FB(15.5); ctx.fillStyle = "#ffffff";
+      ctx.fillText(dn, TX, AV_CY - 8);
       ctx.restore();
-
       if (handle || timeAgo) {
         const sub = [handle ? `@${handle}` : "", timeAgo].filter(Boolean).join("  ·  ");
-        ctx.font = FN(12);
-        ctx.fillStyle = "rgba(255,255,255,0.62)";
-        ctx.fillText(sub, TX, TY_sub);
+        ctx.font = FN(12); ctx.fillStyle = "rgba(255,255,255,0.62)";
+        ctx.fillText(sub, TX, AV_CY + 12);
       }
     }
 
-    // ── 4b. Caption — emoji-aware rendering ───────────────────────────────
+    // ── 4b. Caption — pakai FN() agar NotoColorEmoji jadi fallback otomatis ──
     if (caption && caption.trim()) {
       const CAP_FONT_SZ = 15;
       const CAP_LH      = 22.5;
       const CAP_MAX_W   = CARD_W - 56;
       const CAP_X       = CARD_X + 20;
 
-      // Gunakan wrapTextMixed agar pengukuran lebar akurat untuk emoji
-      ctx.font = FN(CAP_FONT_SZ); // set font awal untuk fallback measure
-      const capLines = wrapTextMixed(ctx, caption.trim(), CAP_MAX_W, CAP_FONT_SZ).slice(0, 4);
+      ctx.font = FN(CAP_FONT_SZ);
+      const capLines = wrapText(ctx, caption.trim(), CAP_MAX_W).slice(0, 4);
       const capTotalH = capLines.length * CAP_LH;
-
       const capBaseY  = AV_CY - AV_R - 15;
       const capStartY = capBaseY - capTotalH + CAP_LH;
 
       ctx.save();
+      ctx.font = FN(CAP_FONT_SZ);
       ctx.textAlign    = "left";
       ctx.textBaseline = "alphabetic";
-
+      ctx.fillStyle    = "rgba(255,255,255,0.96)";
       for (let i = 0; i < capLines.length; i++) {
         const ly = capStartY + i * CAP_LH;
-        ctx.save();
-        ctx.shadowColor   = "rgba(0,0,0,0.80)";
-        ctx.shadowBlur    = 14;
-        ctx.shadowOffsetY = 1;
-        // Pass pertama: shadow tebal
-        drawTextWithEmoji(ctx, capLines[i], CAP_X, ly, CAP_FONT_SZ, "rgba(255,255,255,0.96)");
+        ctx.shadowColor = "rgba(0,0,0,0.80)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 1;
+        ctx.fillText(capLines[i], CAP_X, ly);
         ctx.shadowBlur = 4;
-        // Pass kedua: shadow halus (double-render untuk text shadow yang tajam)
-        drawTextWithEmoji(ctx, capLines[i], CAP_X, ly, CAP_FONT_SZ, "rgba(255,255,255,0.96)");
-        ctx.restore();
+        ctx.fillText(capLines[i], CAP_X, ly);
       }
-      ctx.shadowColor = "transparent";
       ctx.restore();
     }
 
-    // ── Mute icon — dipindah lebih ke bawah agar tidak tabrakan progress bar
-    // Dulu: CARD_Y + 14 + MUTE_R  → terlalu dekat progress bar (PB_TOP = CARD_Y+16)
-    // Sekarang: CARD_Y + 44 + MUTE_R  → berada di bawah progress bar dengan cukup jarak
+    // ── Mute icon — posisi di bawah progress bar ──────────────────────────
     const MUTE_R  = 17;
     const MUTE_CX = CARD_X + CARD_W - 14 - MUTE_R;
-    const MUTE_CY = CARD_Y + 44 + MUTE_R;   // ← FIX: dari 14 → 44
+    const MUTE_CY = CARD_Y + 44 + MUTE_R;   // 44px dari atas card, di bawah progress bar
 
     ctx.save();
     ctx.fillStyle = "rgba(20,20,28,0.42)";
-    ctx.strokeStyle = "rgba(255,255,255,0.14)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(255,255,255,0.14)"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(MUTE_CX, MUTE_CY, MUTE_R, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
     ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 1.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
     const mx = MUTE_CX - 4.5, my = MUTE_CY;
     ctx.beginPath();
-    ctx.moveTo(mx - 5, my - 3); ctx.lineTo(mx, my - 3);
-    ctx.lineTo(mx + 5, my - 7); ctx.lineTo(mx + 5, my + 7);
-    ctx.lineTo(mx, my + 3); ctx.lineTo(mx - 5, my + 3); ctx.closePath(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(mx + 9, my - 4); ctx.lineTo(mx + 14, my + 4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(mx + 14, my - 4); ctx.lineTo(mx + 9, my + 4); ctx.stroke();
+    ctx.moveTo(mx-5, my-3); ctx.lineTo(mx, my-3); ctx.lineTo(mx+5, my-7);
+    ctx.lineTo(mx+5, my+7); ctx.lineTo(mx, my+3); ctx.lineTo(mx-5, my+3); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx+9, my-4); ctx.lineTo(mx+14, my+4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx+14, my-4); ctx.lineTo(mx+9, my+4); ctx.stroke();
     ctx.restore();
 
     // ── 5. Action menu ────────────────────────────────────────────────────
     if (menuKeys.length > 0) {
-      const MENU_X = CARD_X;
-      const MENU_W = CARD_W;
+      const MENU_X = CARD_X, MENU_W = CARD_W;
       const MENU_Y = CARD_Y + CARD_H + BELOW_GAP;
-      const MENU_R = 20;
-      const ICON_S = 11.5;
-      const LABEL_SIZE = 14.5;
-      const COUNT_SIZE = 13;
+      const MENU_R = 20, ICON_S = 11.5, LABEL_SIZE = 14.5, COUNT_SIZE = 13;
       const ICON_CX = MENU_X + 24 + ICON_S;
 
       ctx.save();
       ctx.fillStyle = "rgba(16,16,23,0.90)";
-      ctx.shadowColor = "rgba(0,0,0,0.55)";
-      ctx.shadowBlur  = 32;
-      ctx.shadowOffsetY = 10;
-      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R);
-      ctx.fill();
+      ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 32; ctx.shadowOffsetY = 10;
+      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R); ctx.fill();
       ctx.restore();
 
       ctx.save();
-      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R);
-      ctx.clip();
+      rr(ctx, MENU_X, MENU_Y, MENU_W, MENU_H, MENU_R); ctx.clip();
       const sheen = ctx.createLinearGradient(0, MENU_Y, 0, MENU_Y + 40);
-      sheen.addColorStop(0, "rgba(255,255,255,0.06)");
-      sheen.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = sheen;
-      ctx.fillRect(MENU_X, MENU_Y, MENU_W, 40);
-
+      sheen.addColorStop(0, "rgba(255,255,255,0.06)"); sheen.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = sheen; ctx.fillRect(MENU_X, MENU_Y, MENU_W, 40);
       const likeIdx = menuKeys.indexOf("like");
       if (likeIdx !== -1 && isLiked) {
         const rowY = MENU_Y + MENU_PAD_Y + likeIdx * MENU_ROW_H;
@@ -644,18 +465,16 @@ module.exports = async (req, res) => {
       ctx.restore();
 
       ctx.save();
-      ctx.strokeStyle = "rgba(255,255,255,0.08)";
-      ctx.lineWidth = 1;
-      rr(ctx, MENU_X + 0.5, MENU_Y + 0.5, MENU_W - 1, MENU_H - 1, MENU_R);
-      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1;
+      rr(ctx, MENU_X+0.5, MENU_Y+0.5, MENU_W-1, MENU_H-1, MENU_R); ctx.stroke();
       ctx.restore();
 
       for (let i = 0; i < menuKeys.length; i++) {
-        const key    = menuKeys[i];
-        const isRep  = key === "report";
-        const color  = isLiked && key === "like" ? "#fb7185" : isRep ? "#fb7185" : "#f5f5f7";
-        const rowY   = MENU_Y + MENU_PAD_Y + i * MENU_ROW_H;
-        const rowCY  = rowY + MENU_ROW_H / 2;
+        const key   = menuKeys[i];
+        const isRep = key === "report";
+        const color = isLiked && key === "like" ? "#fb7185" : isRep ? "#fb7185" : "#f5f5f7";
+        const rowY  = MENU_Y + MENU_PAD_Y + i * MENU_ROW_H;
+        const rowCY = rowY + MENU_ROW_H / 2;
 
         if (i > 0) {
           ctx.fillStyle = "rgba(255,255,255,0.06)";
@@ -665,10 +484,8 @@ module.exports = async (req, res) => {
         ICON_FNS[key](ctx, ICON_CX, rowCY, ICON_S, color, key === "like" && isLiked);
 
         ctx.font = FSB(LABEL_SIZE);
-        ctx.fillStyle = color;
-        ctx.textBaseline = "middle";
-        const LABEL_X = ICON_CX + ICON_S * 2.15;
-        ctx.fillText(ICON_LABELS[key], LABEL_X, rowCY + 0.5);
+        ctx.fillStyle = color; ctx.textBaseline = "middle";
+        ctx.fillText(ICON_LABELS[key], ICON_CX + ICON_S * 2.15, rowCY + 0.5);
         ctx.textBaseline = "alphabetic";
 
         const cnt = counts[key];
