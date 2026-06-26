@@ -2,21 +2,25 @@ const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 const fs   = require("fs");
 const path = require("path");
 
-let hasEmojiFont = false;
+// ── FONTS ─────────────────────────────────────────────────────
+let hasEmoji = false;
 try {
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")), "Inter");
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf")), "InterBold");
+  GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Medium.ttf")), "InterMedium");
   try {
     GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf")), "NotoColorEmoji");
-    hasEmojiFont = true;
+    hasEmoji = true;
   } catch (_) {}
 } catch (e) { console.log("FONT ERROR:", e.message); }
 
-const ef = (sz) => `${sz}px ${hasEmojiFont ? "NotoColorEmoji,sans-serif" : "sans-serif"}`;
-const cf = (sz) => `${sz}px ${hasEmojiFont ? "Inter,NotoColorEmoji,sans-serif" : "Inter,sans-serif"}`;
-const bf = (sz) => `bold ${sz}px ${hasEmojiFont ? "InterBold,NotoColorEmoji,sans-serif" : "InterBold,sans-serif"}`;
+const EF = (sz) => `${sz}px ${hasEmoji ? "NotoColorEmoji,sans-serif" : "sans-serif"}`;
+const CF = (sz) => `${sz}px ${hasEmoji ? "Inter,NotoColorEmoji,sans-serif" : "Inter,sans-serif"}`;
+const MF = (sz) => `${sz}px ${hasEmoji ? "InterMedium,NotoColorEmoji,sans-serif" : "InterMedium,sans-serif"}`;
+const BF = (sz) => `bold ${sz}px ${hasEmoji ? "InterBold,NotoColorEmoji,sans-serif" : "InterBold,sans-serif"}`;
 
-function rr(ctx, x, y, w, h, r, fill, stroke) {
+// ── UTILS ─────────────────────────────────────────────────────
+function roundRect(ctx, x, y, w, h, r) {
   r = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -25,11 +29,9 @@ function rr(ctx, x, y, w, h, r, fill, stroke) {
   ctx.arcTo(x,     y + h, x,     y,     r);
   ctx.arcTo(x,     y,     x + w, y,     r);
   ctx.closePath();
-  if (fill)   ctx.fill();
-  if (stroke) ctx.stroke();
 }
 
-function rrC(ctx, x, y, w, h, tl, tr, br, bl) {
+function roundRectCustom(ctx, x, y, w, h, tl, tr, br, bl) {
   ctx.beginPath();
   ctx.moveTo(x + tl, y);
   ctx.arcTo(x + w, y,     x + w, y + h, tr);
@@ -40,44 +42,69 @@ function rrC(ctx, x, y, w, h, tl, tr, br, bl) {
 }
 
 function wrapText(ctx, text, maxW) {
-  const out = [];
+  const lines = [];
   for (const hard of String(text).replace(/\\n/g, "\n").split("\n")) {
     const words = hard.split(" ");
     let cur = "";
     for (const w of words) {
       const test = cur ? cur + " " + w : w;
-      if (ctx.measureText(test).width > maxW && cur) { out.push(cur); cur = w; }
+      if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; }
       else cur = test;
     }
-    out.push(cur);
+    lines.push(cur);
   }
-  return out;
+  return lines;
+}
+
+// Draw shadow without affecting clip
+function drawShadowRect(ctx, x, y, w, h, r, color, blur, oy) {
+  ctx.save();
+  ctx.shadowColor   = color;
+  ctx.shadowBlur    = blur;
+  ctx.shadowOffsetY = oy;
+  ctx.shadowOffsetX = 0;
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fillStyle = "rgba(0,0,0,0)"; // transparent fill just to trigger shadow
+  // We need an opaque fill for shadow to show — use a tiny trick:
+  ctx.restore();
 }
 
 async function drawAvatar(ctx, url, cx, cy, r) {
   ctx.save();
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
-  let ok = false;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  let drawn = false;
   if (url) {
-    try { const img = await loadImage(url); ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2); ok = true; }
-    catch (_) {}
+    try {
+      const img = await loadImage(url);
+      ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+      drawn = true;
+    } catch (_) {}
   }
-  if (!ok) {
-    ctx.fillStyle = "#c0c0cc"; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-    ctx.fillStyle = "#9090a8";
-    ctx.beginPath(); ctx.arc(cx, cy - r * .12, r * .36, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(cx, cy + r * .58, r * .48, r * .32, 0, 0, Math.PI * 2); ctx.fill();
+  if (!drawn) {
+    // Fallback: silhouette
+    const grad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    grad.addColorStop(0, "#9090c8");
+    grad.addColorStop(1, "#6060a0");
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.beginPath(); ctx.arc(cx, cy - r * 0.12, r * 0.36, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.58, r * 0.46, r * 0.30, 0, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
 }
 
-// ── ICON HELPERS ──────────────────────────────────────────────
-
+// ── ICON DRAWING ─────────────────────────────────────────────
 function icoBack(ctx, x, y, color) {
   ctx.save();
-  ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath();
-  ctx.moveTo(x + 10, y - 8); ctx.lineTo(x, y); ctx.lineTo(x + 10, y + 8);
+  ctx.moveTo(x + 9, y - 7);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x + 9, y + 7);
   ctx.stroke();
   ctx.restore();
 }
@@ -85,225 +112,268 @@ function icoBack(ctx, x, y, color) {
 function icoMore(ctx, x, y, color) {
   ctx.save();
   ctx.fillStyle = color;
-  [-8, 0, 8].forEach(dy => {
+  for (const dy of [-7, 0, 7]) {
     ctx.beginPath(); ctx.arc(x, y + dy, 2.2, 0, Math.PI * 2); ctx.fill();
-  });
+  }
   ctx.restore();
 }
 
-function icoVerified(ctx, cx, cy) {
+function icoVerified(ctx, cx, cy, r = 9) {
   ctx.save();
   ctx.fillStyle = "#20d5ec";
-  ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath();
-  ctx.moveTo(cx - 4, cy); ctx.lineTo(cx - 1, cy + 3.5); ctx.lineTo(cx + 5, cy - 3.5);
+  ctx.moveTo(cx - 3.5, cy + 0.5);
+  ctx.lineTo(cx - 0.5, cy + 3.5);
+  ctx.lineTo(cx + 4.5, cy - 3);
   ctx.stroke();
   ctx.restore();
 }
 
-function icoReply(ctx, cx, cy, C) {
-  ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.beginPath(); ctx.moveTo(cx + 14, cy - 7); ctx.lineTo(cx + 2, cy); ctx.lineTo(cx + 14, cy + 7); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + 2, cy); ctx.quadraticCurveTo(cx + 14, cy - 1, cx + 14, cy - 8); ctx.stroke();
-  ctx.restore();
-}
-
-function icoForward(ctx, cx, cy, C) {
-  ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.beginPath(); ctx.moveTo(cx + 2, cy - 7); ctx.lineTo(cx + 14, cy); ctx.lineTo(cx + 2, cy + 7); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + 14, cy); ctx.quadraticCurveTo(cx + 2, cy - 1, cx + 2, cy - 8); ctx.stroke();
-  ctx.restore();
-}
-
-function icoCopy(ctx, cx, cy, C) {
-  ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 1.8; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  rr(ctx, cx + 1, cy - 5, 10, 11, 2, false, true);
-  rr(ctx, cx + 4, cy - 9, 10, 11, 2, false, true);
-  ctx.restore();
-}
-
-function icoTranslate(ctx, cx, cy, C) {
-  ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 1.8; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.beginPath(); ctx.moveTo(cx, cy - 7); ctx.lineTo(cx + 12, cy - 7); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + 6, cy - 7); ctx.lineTo(cx + 6, cy - 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + 1, cy - 2); ctx.lineTo(cx + 11, cy - 2); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + 3, cy - 2); ctx.lineTo(cx + 1, cy + 6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + 9, cy - 2); ctx.lineTo(cx + 11, cy + 6); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + 3, cy + 2); ctx.lineTo(cx + 11, cy + 2); ctx.stroke();
-  ctx.restore();
-}
-
-function icoTrash(ctx, cx, cy, C) {
-  ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 1.8; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  rr(ctx, cx + 2, cy - 4, 10, 11, 2, false, true);
+function icoReply(ctx, cx, cy, color) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2.2;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.beginPath();
-  ctx.moveTo(cx, cy - 4); ctx.lineTo(cx + 14, cy - 4);
-  ctx.moveTo(cx + 4, cy - 4); ctx.lineTo(cx + 4, cy - 8);
-  ctx.lineTo(cx + 10, cy - 8); ctx.lineTo(cx + 10, cy - 4);
+  ctx.moveTo(cx + 13, cy - 6); ctx.lineTo(cx + 2, cy); ctx.lineTo(cx + 13, cy + 6);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 2, cy);
+  ctx.quadraticCurveTo(cx + 13, cy, cx + 13, cy - 7);
   ctx.stroke();
   ctx.restore();
 }
 
-function icoFlag(ctx, cx, cy, C) {
-  ctx.save(); ctx.strokeStyle = C.danger; ctx.fillStyle = C.danger; ctx.lineWidth = 2; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx + 13, cy - 4); ctx.lineTo(cx, cy + 1); ctx.closePath(); ctx.fill();
+function icoForward(ctx, cx, cy, color) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2.2;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx + 3, cy - 6); ctx.lineTo(cx + 14, cy); ctx.lineTo(cx + 3, cy + 6);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 14, cy);
+  ctx.quadraticCurveTo(cx + 3, cy, cx + 3, cy - 7);
+  ctx.stroke();
   ctx.restore();
 }
 
-function icoSmiley(ctx, cx, cy, C) {
-  ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 2; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.arc(cx, cy, 13, 0, Math.PI * 2); ctx.stroke();
-  ctx.fillStyle = C.icon;
-  ctx.beginPath(); ctx.arc(cx - 4, cy - 3, 2, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx + 4, cy - 3, 2, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(cx, cy + 2, 6, 0.1 * Math.PI, 0.9 * Math.PI, false); ctx.stroke();
+function icoCopy(ctx, cx, cy, color) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 1.9;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  roundRect(ctx, cx + 2, cy - 4, 10, 11, 2); ctx.stroke();
+  roundRect(ctx, cx - 1, cy - 8, 10, 11, 2); ctx.stroke();
   ctx.restore();
 }
 
-function icoSend(ctx, cx, cy, C) {
-  ctx.save(); ctx.strokeStyle = C.icon; ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.beginPath(); ctx.moveTo(cx - 10, cy); ctx.lineTo(cx + 10, cy); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx + 2, cy - 8); ctx.lineTo(cx + 10, cy); ctx.lineTo(cx + 2, cy + 8); ctx.stroke();
+function icoTranslate(ctx, cx, cy, color) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 1.9;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  // "A" language icon
+  ctx.beginPath();
+  ctx.moveTo(cx + 1, cy - 7); ctx.lineTo(cx + 11, cy - 7); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 6, cy - 7); ctx.lineTo(cx + 6, cy - 3); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 2, cy - 3); ctx.lineTo(cx + 10, cy - 3); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 3, cy - 3); ctx.lineTo(cx + 1, cy + 5); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 9, cy - 3); ctx.lineTo(cx + 11, cy + 5); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 3, cy + 1); ctx.lineTo(cx + 11, cy + 1); ctx.stroke();
   ctx.restore();
 }
 
-// ── MAIN HANDLER ─────────────────────────────────────────────
+function icoTrash(ctx, cx, cy, color) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 1.9;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  roundRect(ctx, cx + 1, cy - 3, 12, 11, 2); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx - 1, cy - 3); ctx.lineTo(cx + 15, cy - 3); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 4, cy - 3); ctx.lineTo(cx + 4, cy - 7);
+  ctx.lineTo(cx + 10, cy - 7); ctx.lineTo(cx + 10, cy - 3);
+  ctx.stroke();
+  ctx.restore();
+}
 
+function icoFlag(ctx, cx, cy, color) {
+  ctx.save();
+  ctx.strokeStyle = color; ctx.fillStyle = color;
+  ctx.lineWidth = 2; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(cx + 1, cy - 8); ctx.lineTo(cx + 1, cy + 8); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 1, cy - 8);
+  ctx.lineTo(cx + 14, cy - 4);
+  ctx.lineTo(cx + 1, cy + 1);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function icoSmiley(ctx, cx, cy, color) {
+  ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx - 4, cy - 3, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx + 4, cy - 3, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy + 2, 5.5, 0.12 * Math.PI, 0.88 * Math.PI); ctx.stroke();
+  ctx.restore();
+}
+
+function icoSend(ctx, cx, cy, color) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2.2;
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.beginPath(); ctx.moveTo(cx - 9, cy); ctx.lineTo(cx + 9, cy); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + 2, cy - 7); ctx.lineTo(cx + 9, cy); ctx.lineTo(cx + 2, cy + 7);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── MAIN ──────────────────────────────────────────────────────
 async function handleTTQC(req, res) {
-  const {
-    name     = "User",
-    message  = "Halo!",
-    avatar   = "",
-    theme    = "light",
-    verified = "false",
-    time     = "now",
-    likes    = "",
-  } = req.query;
+  const q = req.query || {};
+  const name     = q.name     || "User";
+  const message  = q.message  || "Halo!";
+  const avatar   = q.avatar   || "";
+  const theme    = q.theme    || "light";
+  const verified = q.verified === "true";
+  const time     = q.time     || "now";
+  const likes    = q.likes    || "";
 
   const dark = theme === "dark";
 
+  // ── COLOR TOKENS ──────────────────────────────────────────
   const C = {
-    bg:       dark ? "#111111" : "#ededf2",
-    white:    dark ? "#1e1e1e" : "#ffffff",
-    bubble:   dark ? "#272727" : "#ffffff",
-    ghostS:   dark ? "#5050cc" : "#c8c8e8",  // sent ghost
-    ghostR:   dark ? "#333333" : "#d0d0dc",  // recv ghost
-    ghostAvt: dark ? "#3a3a4a" : "#b8b8cc",
-    name:     dark ? "#ffffff" : "#111111",
-    msg:      dark ? "#e8e8e8" : "#111111",
-    sub:      dark ? "#777777" : "#888899",
-    div:      dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)",
-    inputBg:  dark ? "#2a2a2a" : "#eeeeee",
+    bg:       dark ? "#0f0f0f" : "#e8e8f0",
+    hdr:      dark ? "#1a1a1a" : "#ffffff",
+    bubble:   dark ? "#242424" : "#ffffff",
+    ghostS:   dark ? "#3d3d8a" : "#bdbde8",
+    ghostR:   dark ? "#2e2e2e" : "#d4d4e0",
+    ghostAvt: dark ? "#383850" : "#b0b0c8",
+    name:     dark ? "#f0f0f0" : "#0d0d0d",
+    msg:      dark ? "#e0e0e0" : "#131313",
+    sub:      dark ? "#666680" : "#8080a0",
+    div:      dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)",
+    inputBg:  dark ? "#262626" : "#ececec",
     danger:   "#fe2c55",
-    icon:     dark ? "#aaaaaa" : "#555566",
-    itemText: dark ? "#f0f0f0" : "#111111",
-    menuBg:   dark ? "#222222" : "#ffffff",
-    pillBg:   dark ? "#2e2e2e" : "#ffffff",
+    icon:     dark ? "#909090" : "#606070",
+    itemTxt:  dark ? "#eeeeee" : "#111111",
+    menuBg:   dark ? "#1e1e1e" : "#ffffff",
+    pillBg:   dark ? "#252525" : "#ffffff",
+    shadow:   dark ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.12)",
   };
 
-  const W      = 400;
-  const FS     = 17;
-  const LH     = 26;
-  const AVT_R  = 20;
-  const GAP    = 10;
-  const BX     = 14 + AVT_R * 2 + GAP;
-  const BMAX   = W - BX - 16;
-  const BPX    = 14, BPY = 11;
+  // ── LAYOUT CONSTANTS ──────────────────────────────────────
+  const W      = 420;
+  const SCALE  = 2; // retina
+  const FS     = 16;
+  const LH     = 25;
+  const AVR    = 20; // avatar radius
+  const BX     = 16 + AVR * 2 + 10; // bubble x start
+  const BMAX   = W - BX - 18;
+  const BPX    = 13; const BPY = 10;
 
-  // Measure bubble
-  const tmp = createCanvas(800, 10);
+  // Measure text
+  const tmp = createCanvas(W * 2, 10);
   const tc  = tmp.getContext("2d");
-  tc.font   = cf(FS);
+  tc.font   = CF(FS);
   const lines = wrapText(tc, message, BMAX - BPX * 2);
   const textW = lines.reduce((m, l) => Math.max(m, tc.measureText(l).width), 0);
-  const bW    = Math.min(BMAX, Math.max(textW + BPX * 2, 100));
-  const bH    = BPY + lines.length * LH + BPY;
+  const bW    = Math.min(BMAX, Math.max(textW + BPX * 2, 110));
+  const bH    = BPY + lines.length * LH + BPY + 2;
 
-  // Heights
-  const H_HDR   = 60;
-  const H_GHOST = 148;
-  const H_PILL  = 60;
-  const H_BUB   = Math.max(bH + 16, 58);
-  const H_TIME  = 28;
-  const ITEM_H  = 50;
-  const N_ITEMS = 6;
-  const H_MENU  = N_ITEMS * ITEM_H;
-  const H_INPUT = 62;
-  const PAD     = 8;  // padding between sections
+  // Section heights
+  const H_HDR   = 64;
+  const H_GHOST = 152;
+  const H_PILL  = 64;
+  const H_BUB   = Math.max(bH + 20, 60);
+  const H_TIME  = 30;
+  const ITEM_H  = 52;
+  const H_MENU  = ITEM_H * 6;
+  const H_INPUT = 64;
+  const GAP     = 10;
 
-  const H = H_HDR + H_GHOST + PAD + H_PILL + PAD + H_BUB + H_TIME + PAD + H_MENU + PAD + H_INPUT;
+  const H = H_HDR + H_GHOST + GAP + H_PILL + GAP + H_BUB + H_TIME + GAP + H_MENU + GAP + H_INPUT;
 
-  const canvas = createCanvas(W, H);
+  // Create canvas at 2x for retina sharpness
+  const canvas = createCanvas(W * SCALE, H * SCALE);
   const ctx    = canvas.getContext("2d");
+  ctx.scale(SCALE, SCALE);
 
+  // Background
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, W, H);
 
   let Y = 0;
 
-  // ── 1. HEADER ───────────────────────────────────────────────
-  ctx.fillStyle = C.white;
-  ctx.fillRect(0, Y, W, H_HDR);
+  // ── 1. HEADER ─────────────────────────────────────────────
+  ctx.fillStyle = C.hdr;
+  ctx.fillRect(0, 0, W, H_HDR);
 
-  const hcy = Y + H_HDR / 2;
-  icoBack(ctx, 20, hcy, C.name);
-  await drawAvatar(ctx, avatar, 52, hcy, 20);
+  // Bottom border
+  ctx.fillStyle = C.div;
+  ctx.fillRect(0, H_HDR - 1, W, 1);
 
-  ctx.font = bf(16);
+  const hMid = H_HDR / 2;
+
+  // Back arrow
+  icoBack(ctx, 18, hMid, C.name);
+
+  // Avatar
+  await drawAvatar(ctx, avatar, 50, hMid, AVR);
+
+  // Name
+  const dn = name.length > 22 ? name.slice(0, 21) + "…" : name;
+  ctx.font = BF(15);
   ctx.fillStyle = C.name;
-  const dn = name.length > 20 ? name.slice(0, 19) + "…" : name;
-  ctx.fillText(dn, 82, hcy + 6);
+  ctx.fillText(dn, 80, hMid - 3);
 
-  if (verified === "true") {
-    const vx = 82 + ctx.measureText(dn).width + 8;
-    icoVerified(ctx, vx + 9, hcy);
+  // Online
+  ctx.font = CF(12);
+  ctx.fillStyle = C.sub;
+  ctx.fillText("online", 80, hMid + 13);
+
+  // Verified badge
+  if (verified) {
+    ctx.font = BF(15);
+    const nw = ctx.measureText(dn).width;
+    icoVerified(ctx, 80 + nw + 12, hMid - 3);
   }
 
-  icoMore(ctx, W - 20, hcy, C.icon);
+  // More icon
+  icoMore(ctx, W - 18, hMid, C.icon);
 
-  ctx.fillStyle = C.div;
-  ctx.fillRect(0, Y + H_HDR - 1, W, 1);
   Y += H_HDR;
 
-  // ── 2. GHOST CHAT ────────────────────────────────────────────
-  // Row layout: recv(avatar) | sent, sent | recv(avatar), recv(no avatar) | sent
-  // But per our design: sent, recv(avt), sent, recv(avt)
-  const GH  = 30;   // ghost bubble height
-  const GR  = 15;   // ghost bubble border radius
-  const GAV = 16;   // ghost avatar radius
-  const GP  = 14;   // left/right padding
-
+  // ── 2. GHOST CHAT ─────────────────────────────────────────
   const ghostRows = [
-    { type: "sent", w: 130 },
-    { type: "recv", w: 155, avt: true },
-    { type: "sent", w: 95  },
-    { type: "recv", w: 130, avt: true },
+    { type: "sent", w: 120 },
+    { type: "recv", w: 150 },
+    { type: "sent", w: 85  },
+    { type: "recv", w: 125 },
   ];
-
-  const rowSpacing = Math.floor(H_GHOST / ghostRows.length);
+  const rowH = Math.floor(H_GHOST / ghostRows.length);
+  const GH = 28; const GAV = 15; const GP = 16;
 
   for (let i = 0; i < ghostRows.length; i++) {
-    const row  = ghostRows[i];
-    const rowY = Y + i * rowSpacing + (rowSpacing - GH) / 2;
+    const row = ghostRows[i];
+    const ry  = Y + i * rowH + (rowH - GH) / 2;
 
     ctx.save();
-    ctx.globalAlpha = 0.42;
+    ctx.globalAlpha = 0.38;
 
     if (row.type === "recv") {
-      // avatar circle
       ctx.fillStyle = C.ghostAvt;
-      ctx.beginPath();
-      ctx.arc(GP + GAV, rowY + GH / 2, GAV, 0, Math.PI * 2);
-      ctx.fill();
-      // bubble
+      ctx.beginPath(); ctx.arc(GP + GAV, ry + GH / 2, GAV, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = C.ghostR;
-      rr(ctx, GP + GAV * 2 + 8, rowY, row.w, GH, GR, true, false);
+      roundRect(ctx, GP + GAV * 2 + 8, ry, row.w, GH, 14);
+      ctx.fill();
     } else {
-      // sent bubble right-aligned
       ctx.fillStyle = C.ghostS;
-      rr(ctx, W - GP - row.w, rowY, row.w, GH, GR, true, false);
+      roundRect(ctx, W - GP - row.w, ry, row.w, GH, 14);
+      ctx.fill();
     }
 
     ctx.restore();
@@ -311,120 +381,135 @@ async function handleTTQC(req, res) {
 
   Y += H_GHOST;
 
-  // ── 3. EMOJI REACTION PILL ──────────────────────────────────
-  Y += PAD;
-  const PX = 14, PW = W - 28, PH = 48, PY = Y + 4;
+  // ── 3. EMOJI PILL ─────────────────────────────────────────
+  Y += GAP;
+  const PX = 14, PW = W - 28, PH = 50, PY = Y + 7;
 
+  // Shadow
   ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.12)"; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3;
+  ctx.shadowColor = C.shadow; ctx.shadowBlur = 16; ctx.shadowOffsetY = 4;
   ctx.fillStyle = C.pillBg;
-  rr(ctx, PX, PY, PW, PH, PH / 2, true, false);
+  roundRect(ctx, PX, PY, PW, PH, PH / 2);
+  ctx.fill();
   ctx.restore();
 
   const emojis = ["❤️", "😂", "😭", "👍", "😡", "🤔"];
-  const eSlot  = PW / emojis.length;
-  ctx.font = ef(26); ctx.textAlign = "center";
+  const slotW  = PW / emojis.length;
+  ctx.font = EF(24);
+  ctx.textAlign = "center";
   for (let i = 0; i < emojis.length; i++) {
-    ctx.fillText(emojis[i], PX + eSlot * i + eSlot / 2, PY + PH / 2 + 10);
+    ctx.fillText(emojis[i], PX + slotW * i + slotW / 2, PY + PH / 2 + 9);
   }
   ctx.textAlign = "left";
 
   Y += H_PILL;
 
-  // ── 4. HIGHLIGHTED BUBBLE ───────────────────────────────────
-  Y += PAD;
-  const ACX = 14 + AVT_R;
-  const ACY = Y + AVT_R + 4;
-  await drawAvatar(ctx, avatar, ACX, ACY, AVT_R);
+  // ── 4. HIGHLIGHTED BUBBLE ─────────────────────────────────
+  Y += GAP;
+  const avCX = 16 + AVR;
+  const avCY = Y + AVR + 6;
+  await drawAvatar(ctx, avatar, avCX, avCY, AVR);
 
-  const BXX = ACX + AVT_R + GAP;
-  const BYY = Y + 4;
+  const bXX = avCX + AVR + 10;
+  const bYY = Y + 4;
 
+  // Bubble shadow
   ctx.save();
-  ctx.shadowColor = dark ? "rgba(0,0,0,0.40)" : "rgba(0,0,0,0.14)";
-  ctx.shadowBlur  = 18;
-  ctx.shadowOffsetY = 3;
+  ctx.shadowColor   = dark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.12)";
+  ctx.shadowBlur    = 20;
+  ctx.shadowOffsetY = 4;
   ctx.fillStyle = C.bubble;
-  rrC(ctx, BXX, BYY, bW, bH, 4, 18, 18, 18);
+  roundRectCustom(ctx, bXX, bYY, bW, bH, 4, 18, 18, 18);
   ctx.fill();
   ctx.restore();
 
-  let ty = BYY + BPY + FS;
-  ctx.font = cf(FS); ctx.fillStyle = C.msg;
+  // Message text
+  ctx.font = CF(FS);
+  ctx.fillStyle = C.msg;
+  let ty = bYY + BPY + FS;
   for (const line of lines) {
-    ctx.fillText(line, BXX + BPX, ty);
+    ctx.fillText(line, bXX + BPX, ty);
     ty += LH;
   }
 
   Y += H_BUB;
 
-  // ── 5. TIMESTAMP ────────────────────────────────────────────
-  ctx.font = cf(12); ctx.fillStyle = C.sub;
-  ctx.fillText(time + (likes ? `   ❤️ ${likes}` : ""), BXX, Y + 18);
+  // ── 5. TIMESTAMP ──────────────────────────────────────────
+  ctx.font = CF(12);
+  ctx.fillStyle = C.sub;
+  ctx.fillText(time + (likes ? `   ❤️ ${likes}` : ""), bXX, Y + 19);
   Y += H_TIME;
 
-  // ── 6. CONTEXT MENU ─────────────────────────────────────────
-  Y += PAD;
-  const MX = 12, MW = W - 24;
+  // ── 6. CONTEXT MENU ───────────────────────────────────────
+  Y += GAP;
+  const MX = 14, MW = W - 28;
 
+  // Menu shadow
   ctx.save();
-  ctx.shadowColor   = dark ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.13)";
-  ctx.shadowBlur    = 22;
-  ctx.shadowOffsetY = 5;
+  ctx.shadowColor   = dark ? "rgba(0,0,0,0.6)" : "rgba(0,0,0,0.11)";
+  ctx.shadowBlur    = 24;
+  ctx.shadowOffsetY = 6;
   ctx.fillStyle = C.menuBg;
-  rr(ctx, MX, Y, MW, H_MENU, 14, true, false);
+  roundRect(ctx, MX, Y, MW, H_MENU, 16);
+  ctx.fill();
   ctx.restore();
 
   const menuItems = [
-    { label: "Balas",            danger: false, draw: icoReply     },
-    { label: "Teruskan",         danger: false, draw: icoForward   },
-    { label: "Salin",            danger: false, draw: icoCopy      },
-    { label: "Terjemahkan",      danger: false, draw: icoTranslate },
-    { label: "Hapus untuk saya", danger: false, draw: icoTrash     },
-    { label: "Laporkan",         danger: true,  draw: icoFlag      },
+    { label: "Balas",            danger: false, fn: icoReply     },
+    { label: "Teruskan",         danger: false, fn: icoForward   },
+    { label: "Salin",            danger: false, fn: icoCopy      },
+    { label: "Terjemahkan",      danger: false, fn: icoTranslate },
+    { label: "Hapus untuk saya", danger: false, fn: icoTrash     },
+    { label: "Laporkan",         danger: true,  fn: icoFlag      },
   ];
 
   for (let i = 0; i < menuItems.length; i++) {
     const it  = menuItems[i];
-    const IY  = Y + i * ITEM_H;
-    const ICX = MX + 26, ICY = IY + ITEM_H / 2;
+    const iy  = Y + i * ITEM_H;
+    const icx = MX + 28;
+    const icy = iy + ITEM_H / 2;
 
+    // Divider
     if (i > 0) {
       ctx.fillStyle = C.div;
-      ctx.fillRect(MX + 14, IY, MW - 28, 1);
+      ctx.fillRect(MX + 16, iy, MW - 32, 1);
     }
 
-    it.draw(ctx, ICX, ICY, C);
+    // Icon
+    it.fn(ctx, icx, icy, it.danger ? C.danger : C.icon);
 
-    ctx.font      = cf(16);
-    ctx.fillStyle = it.danger ? C.danger : C.itemText;
-    ctx.fillText(it.label, MX + 54, ICY + 6);
+    // Label
+    ctx.font = CF(15);
+    ctx.fillStyle = it.danger ? C.danger : C.itemTxt;
+    ctx.fillText(it.label, MX + 56, icy + 6);
   }
 
   Y += H_MENU;
 
-  // ── 7. INPUT BAR ────────────────────────────────────────────
-  Y += PAD;
-  ctx.fillStyle = C.white;
+  // ── 7. INPUT BAR ──────────────────────────────────────────
+  Y += GAP;
+  ctx.fillStyle = C.hdr;
   ctx.fillRect(0, Y, W, H_INPUT);
   ctx.fillStyle = C.div;
   ctx.fillRect(0, Y, W, 1);
 
-  const ICY2 = Y + H_INPUT / 2;
+  const iMid = Y + H_INPUT / 2;
 
-  // Smiley left
-  icoSmiley(ctx, 28, ICY2, C);
+  icoSmiley(ctx, 26, iMid, C.icon);
 
-  // Input box
-  const IX = 54, IW = W - 54 - 52, IH2 = 40, IY2 = ICY2 - IH2 / 2;
+  // Input field
+  const ifX = 50, ifW = W - 50 - 48, ifH = 38, ifY = iMid - ifH / 2;
   ctx.fillStyle = C.inputBg;
-  rr(ctx, IX, IY2, IW, IH2, IH2 / 2, true, false);
-  ctx.font = cf(14); ctx.fillStyle = C.sub;
-  ctx.fillText("Kirim pesan...", IX + 16, ICY2 + 5);
+  roundRect(ctx, ifX, ifY, ifW, ifH, ifH / 2);
+  ctx.fill();
 
-  // Send button right
-  icoSend(ctx, W - 26, ICY2, C);
+  ctx.font = CF(13);
+  ctx.fillStyle = C.sub;
+  ctx.fillText("Kirim pesan...", ifX + 16, iMid + 5);
 
+  icoSend(ctx, W - 24, iMid, C.icon);
+
+  // Output
   res.setHeader("Content-Type", "image/png");
   res.send(canvas.toBuffer("image/png"));
 }
@@ -434,5 +519,5 @@ module.exports = async (req, res) => {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "GET")     return res.status(405).json({ error: "Method not allowed" });
   try   { return await handleTTQC(req, res); }
-  catch (err) { console.error(err); res.status(500).json({ error: err.message }); }
+  catch (err) { console.error(err); return res.status(500).json({ error: err.message }); }
 };
