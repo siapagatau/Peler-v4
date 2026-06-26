@@ -329,9 +329,9 @@ module.exports = async (req, res) => {
     }
     ctx.restore();
 
-    // ── Avatar ukuran sedang ────────────────────────────────
+    // ── Avatar ukuran sedang — padding kiri lebih lapang ──
     const AV_R  = Math.round(HEAD_H * 0.38);
-    const AV_CX = cX + Math.round(HEAD_H * 0.54);
+    const AV_CX = cX + AV_R + Math.round(HEAD_H * 0.30);
     const AV_CY = cY + Math.round(HEAD_H * 0.50);
 
     // Ring glowing
