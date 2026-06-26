@@ -17,13 +17,14 @@ try {
   } catch (_) {}
 } catch (e) { console.log("FONT ERROR:", e.message); }
 
-// Font helpers — persis pola chatFont() di qc.js (ada spasi setelah koma)
-function FN(sz)  { return `normal ${sz}px ${hasEmoji ? "'Inter', 'NotoColorEmoji'" : "Inter,sans-serif"}`; }
-function FB(sz)  { return `bold ${sz}px ${hasEmoji ? "'InterBold', 'NotoColorEmoji'" : "InterBold,sans-serif"}`; }
-function FSB(sz) { return `600 ${sz}px ${hasEmoji ? "'InterSemiBold', 'Inter', 'NotoColorEmoji'" : "InterSemiBold,Inter,sans-serif"}`; }
-// captionFont: sama persis signature chatFont() dari qc.js
-function captionFont(size, weight = 'normal') {
-  const family = hasEmoji ? "'Inter', 'NotoColorEmoji'" : "Inter";
+// ── Font helpers (dengan fallback sans-serif) ──────────────────────────
+function FN(sz)  { return `normal ${sz}px ${hasEmoji ? "'Inter', 'NotoColorEmoji', sans-serif" : "Inter, sans-serif"}`; }
+function FB(sz)  { return `bold ${sz}px ${hasEmoji ? "'InterBold', 'NotoColorEmoji', sans-serif" : "InterBold, sans-serif"}`; }
+function FSB(sz) { return `600 ${sz}px ${hasEmoji ? "'InterSemiBold', 'Inter', 'NotoColorEmoji', sans-serif" : "InterSemiBold, Inter, sans-serif"}`; }
+
+// ⭐ chatFont: sama persis seperti di qc.js, mendukung emoji
+function chatFont(size, weight = 'normal') {
+  const family = hasEmoji ? "'Inter', 'NotoColorEmoji', sans-serif" : "Inter, sans-serif";
   return `${weight} ${size}px ${family}`;
 }
 
@@ -396,21 +397,22 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── 4b. Caption — pakai captionFont() persis seperti chatFont() di qc.js ──
+    // ── 4b. Caption — pakai chatFont() (dukung emoji) ──
     if (caption && caption.trim()) {
       const CAP_FONT_SZ = 15;
       const CAP_LH      = 22.5;
       const CAP_MAX_W   = CARD_W - 56;
       const CAP_X       = CARD_X + 20;
 
-      ctx.font = captionFont(CAP_FONT_SZ);
+      // Set font untuk pengukuran & rendering
+      ctx.font = chatFont(CAP_FONT_SZ);
       const capLines = wrapText(ctx, caption.trim(), CAP_MAX_W).slice(0, 4);
       const capTotalH = capLines.length * CAP_LH;
       const capBaseY  = AV_CY - AV_R - 15;
       const capStartY = capBaseY - capTotalH + CAP_LH;
 
       ctx.save();
-      ctx.font = captionFont(CAP_FONT_SZ);
+      ctx.font = chatFont(CAP_FONT_SZ);
       ctx.textAlign    = "left";
       ctx.textBaseline = "alphabetic";
       ctx.fillStyle    = "rgba(255,255,255,0.96)";
@@ -424,10 +426,10 @@ module.exports = async (req, res) => {
       ctx.restore();
     }
 
-    // ── Mute icon — posisi di bawah progress bar ──────────────────────────
+    // ── Mute icon ─────────────────────────────────────────────────────────
     const MUTE_R  = 17;
     const MUTE_CX = CARD_X + CARD_W - 14 - MUTE_R;
-    const MUTE_CY = CARD_Y + 44 + MUTE_R;   // 44px dari atas card, di bawah progress bar
+    const MUTE_CY = CARD_Y + 44 + MUTE_R;
 
     ctx.save();
     ctx.fillStyle = "rgba(20,20,28,0.42)";
