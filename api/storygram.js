@@ -14,17 +14,20 @@ try {
       "NotoColorEmoji"
     );
     hasEmoji = true;
-  } catch (_) {}
+    console.log("✅ Emoji font loaded successfully!");
+  } catch (_) {
+    console.warn("⚠️ NotoColorEmoji.ttf not found, emoji will not render.");
+  }
 } catch (e) { console.log("FONT ERROR:", e.message); }
 
-// ── Font helpers (dengan fallback sans-serif) ──────────────────────────
-function FN(sz)  { return `normal ${sz}px ${hasEmoji ? "'Inter', 'NotoColorEmoji', sans-serif" : "Inter, sans-serif"}`; }
-function FB(sz)  { return `bold ${sz}px ${hasEmoji ? "'InterBold', 'NotoColorEmoji', sans-serif" : "InterBold, sans-serif"}`; }
-function FSB(sz) { return `600 ${sz}px ${hasEmoji ? "'InterSemiBold', 'Inter', 'NotoColorEmoji', sans-serif" : "InterSemiBold, Inter, sans-serif"}`; }
+// ── Font helpers (tanpa fallback sans-serif, persis seperti di qc.js) ──
+function FN(sz)  { return `normal ${sz}px ${hasEmoji ? "'Inter', 'NotoColorEmoji'" : "Inter"}`; }
+function FB(sz)  { return `bold ${sz}px ${hasEmoji ? "'InterBold', 'NotoColorEmoji'" : "InterBold"}`; }
+function FSB(sz) { return `600 ${sz}px ${hasEmoji ? "'InterSemiBold', 'Inter', 'NotoColorEmoji'" : "InterSemiBold, Inter"}`; }
 
-// ⭐ chatFont: sama persis seperti di qc.js, mendukung emoji
+// chatFont sama persis dengan qc.js
 function chatFont(size, weight = 'normal') {
-  const family = hasEmoji ? "'Inter', 'NotoColorEmoji', sans-serif" : "Inter, sans-serif";
+  const family = hasEmoji ? "'Inter', 'NotoColorEmoji'" : "Inter";
   return `${weight} ${size}px ${family}`;
 }
 
@@ -52,31 +55,25 @@ async function loadSafe(url) {
   try { return await loadImage(url); } catch { return null; }
 }
 
-function wrapText(ctx, text, maxW) {
-  const out = [];
-  for (const hard of String(text).replace(/\\n/g, "\n").split("\n")) {
+// wrapText versi qc.js (lebih sederhana, tanpa pemecahan karakter)
+function wrapText(ctx, text, maxWidth) {
+  const hardLines = String(text).split("\n");
+  const result = [];
+  for (const hard of hardLines) {
     const words = hard.split(" ");
     let cur = "";
     for (const word of words) {
-      if (ctx.measureText(word).width > maxW) {
-        if (cur) { out.push(cur); cur = ""; }
-        let part = "";
-        for (const ch of word) {
-          const test = part + ch;
-          if (ctx.measureText(test).width > maxW && part) {
-            out.push(part); part = ch;
-          } else { part = test; }
-        }
-        cur = part;
-        continue;
-      }
       const test = cur ? cur + " " + word : word;
-      if (ctx.measureText(test).width > maxW && cur) { out.push(cur); cur = word; }
-      else cur = test;
+      if (ctx.measureText(test).width > maxWidth && cur) {
+        result.push(cur);
+        cur = word;
+      } else {
+        cur = test;
+      }
     }
-    if (cur) out.push(cur);
+    if (cur) result.push(cur);
   }
-  return out.filter(l => l.length > 0);
+  return result;
 }
 
 function drawCover(ctx, img, x, y, w, h) {
@@ -397,7 +394,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── 4b. Caption — pakai chatFont() (dukung emoji) ──
+    // ── 4b. Caption — menggunakan chatFont (sama dengan qc.js) ──────────
     if (caption && caption.trim()) {
       const CAP_FONT_SZ = 15;
       const CAP_LH      = 22.5;
