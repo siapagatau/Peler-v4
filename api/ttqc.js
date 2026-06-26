@@ -7,17 +7,16 @@ let hasEmoji = false;
 try {
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Regular.ttf")), "Inter");
   GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Bold.ttf")), "InterBold");
-  GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/Inter-Medium.ttf")), "InterMedium");
   try {
     GlobalFonts.register(fs.readFileSync(path.join(process.cwd(), "fonts/NotoColorEmoji.ttf")), "NotoColorEmoji");
     hasEmoji = true;
   } catch (_) {}
 } catch (e) { console.log("FONT ERROR:", e.message); }
 
-const EF = (sz) => `${sz}px ${hasEmoji ? "NotoColorEmoji,sans-serif" : "sans-serif"}`;
-const CF = (sz) => `${sz}px ${hasEmoji ? "Inter,NotoColorEmoji,sans-serif" : "Inter,sans-serif"}`;
-const MF = (sz) => `${sz}px ${hasEmoji ? "InterMedium,NotoColorEmoji,sans-serif" : "InterMedium,sans-serif"}`;
-const BF = (sz) => `bold ${sz}px ${hasEmoji ? "InterBold,NotoColorEmoji,sans-serif" : "InterBold,sans-serif"}`;
+// Font helpers - tiru pola dari kode referensi agar emoji tampil
+function EF(sz) { return `${sz}px ${hasEmoji ? "'NotoColorEmoji',sans-serif" : "sans-serif"}`; }
+function CF(sz) { return `normal ${sz}px ${hasEmoji ? "'Inter','NotoColorEmoji'" : "Inter"}`; }
+function BF(sz) { return `bold ${sz}px ${hasEmoji ? "'InterBold','NotoColorEmoji'" : "InterBold"}`; }
 
 // ── UTILS ─────────────────────────────────────────────────────
 function roundRect(ctx, x, y, w, h, r) {
@@ -240,7 +239,6 @@ async function handleTTQC(req, res) {
   const theme    = q.theme    || "light";
   const verified = q.verified === "true";
   const time     = q.time     || "now";
-  const likes    = q.likes    || "";
 
   const dark = theme === "dark";
 
@@ -318,28 +316,30 @@ async function handleTTQC(req, res) {
 
   const hMid = H_HDR / 2;
 
-  // Back arrow
-  icoBack(ctx, 18, hMid, C.name);
+  // Back arrow — cukup ruang dari tepi kiri
+  icoBack(ctx, 14, hMid, C.name);
 
-  // Avatar
-  await drawAvatar(ctx, avatar, 50, hMid, AVR);
+  // Avatar — jarak 28px dari ujung kanan panah (panah ujung x=14+9=23, avatar center di 23+16+AVR=~60)
+  const HDR_AVT_CX = 52;
+  await drawAvatar(ctx, avatar, HDR_AVT_CX, hMid, AVR);
 
-  // Name
+  // Name & online — mulai 12px setelah avatar kanan
+  const HDR_TX = HDR_AVT_CX + AVR + 12;
   const dn = name.length > 22 ? name.slice(0, 21) + "…" : name;
   ctx.font = BF(15);
   ctx.fillStyle = C.name;
-  ctx.fillText(dn, 80, hMid - 3);
+  ctx.fillText(dn, HDR_TX, hMid - 3);
 
   // Online
   ctx.font = CF(12);
   ctx.fillStyle = C.sub;
-  ctx.fillText("online", 80, hMid + 13);
+  ctx.fillText("online", HDR_TX, hMid + 13);
 
   // Verified badge
   if (verified) {
     ctx.font = BF(15);
     const nw = ctx.measureText(dn).width;
-    icoVerified(ctx, 80 + nw + 12, hMid - 3);
+    icoVerified(ctx, HDR_TX + nw + 12, hMid - 3);
   }
 
   // More icon
@@ -437,7 +437,7 @@ async function handleTTQC(req, res) {
   // ── 5. TIMESTAMP ──────────────────────────────────────────
   ctx.font = CF(12);
   ctx.fillStyle = C.sub;
-  ctx.fillText(time + (likes ? `   ❤️ ${likes}` : ""), bXX, Y + 19);
+  ctx.fillText(time, bXX, Y + 19);
   Y += H_TIME;
 
   // ── 6. CONTEXT MENU ───────────────────────────────────────
