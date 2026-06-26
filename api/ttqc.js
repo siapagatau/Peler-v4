@@ -192,14 +192,14 @@ async function handleTTQC(req, res) {
   };
 
   // ── CANVAS SIZE ───────────────────────────────────────────
-  const W     = 360;  // lebih compact
+  const W     = 360;
   const SCALE = 2;
   const FS    = 15;
   const LH    = 23;
-  const AVR   = 18;   // avatar radius
+  const AVR   = 18;
   const BPX   = 12; const BPY = 9;
 
-  // Ukur lebar menu dulu (auto-fit teks terpanjang)
+  // Menu items
   const menuItems = [
     { label: "Balas",            danger: false, fn: icoReply     },
     { label: "Teruskan",         danger: false, fn: icoForward   },
@@ -211,25 +211,31 @@ async function handleTTQC(req, res) {
   const menuFontSize = 14;
   const ICO_W   = 22;
   const ICO_GAP = 10;
-  const M_PADX  = 14;
+  const M_PADX  = 16;
+
+  // X start — sejajar kiri semua elemen
+  const BX_START = 14 + AVR*2 + 8;
+
+  // Hitung lebar menu minimum (dari label terpanjang)
   const tmpM = createCanvas(800, 10);
   const tcM  = tmpM.getContext("2d");
   tcM.font   = CF(menuFontSize);
-  const maxLabelW = menuItems.reduce((m, it) => Math.max(m, tcM.measureText(it.label).width), 0);
-  const MW = Math.ceil(M_PADX + ICO_W + ICO_GAP + maxLabelW + M_PADX);
+  const maxLabelW  = menuItems.reduce((m, it) => Math.max(m, tcM.measureText(it.label).width), 0);
+  const MW_MIN     = Math.ceil(M_PADX + ICO_W + ICO_GAP + maxLabelW + M_PADX);
 
-  // X start — sejajar kiri bubble & pill
-  const BX_START = 14 + AVR*2 + 8;
-
-  // Hitung lebar/tinggi bubble
-  const tmp = createCanvas(W * 2, 10);
-  const tc  = tmp.getContext("2d");
-  tc.font   = CF(FS);
+  // Hitung bubble — max width = sisa canvas dari BX_START
   const BMAX  = W - BX_START - 14;
+  const tmp   = createCanvas(W * 2, 10);
+  const tc    = tmp.getContext("2d");
+  tc.font     = CF(FS);
   const lines = wrapText(tc, message, BMAX - BPX*2);
   const textW = lines.reduce((m, l) => Math.max(m, tc.measureText(l).width), 0);
-  const bW    = Math.min(BMAX, Math.max(textW + BPX*2, 90));
+  // bubble width: cukup untuk teks, tapi minimal sama dengan menu
+  const bW    = Math.min(BMAX, Math.max(textW + BPX*2, MW_MIN, 90));
   const bH    = BPY + lines.length * LH + BPY;
+
+  // Menu width ikut bubble width (agar sejajar rapi)
+  const MW = bW;
 
   // Heights — semua compact
   const H_HDR   = 56;
