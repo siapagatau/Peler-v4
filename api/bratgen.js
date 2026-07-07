@@ -215,8 +215,19 @@ module.exports = async (req, res) => {
 
     const finalCanvas = doBlur ? softBlur(canvas) : canvas;
 
-    res.setHeader("Content-Type", "image/png");
-    res.send(finalCanvas.toBuffer("image/png"));
+    // ── OUTPUT: WEBP (dengan fallback ke PNG kalau encode webp gagal) ──────
+    let outBuffer, contentType;
+    try {
+      outBuffer = await finalCanvas.encode("webp");
+      contentType = "image/webp";
+    } catch (encodeErr) {
+      console.error("WebP encode gagal, fallback ke PNG:", encodeErr.message);
+      outBuffer = finalCanvas.toBuffer("image/png");
+      contentType = "image/png";
+    }
+
+    res.setHeader("Content-Type", contentType);
+    res.send(outBuffer);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
