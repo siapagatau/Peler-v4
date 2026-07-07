@@ -90,21 +90,63 @@ function rebuildLines(segments, maxWidth, ctx, fontSize) {
   return lines;
 }
 
-// Ganti sharp .blur(): downsample lalu upscale pakai smoothing canvas.
+// Ganti sharp .blur(): box blur asli di atas pixel data (bukan downsample-upscale
+// yang bikin hasil burik/pecah). 3 pass box blur ≈ gaussian blur yang halus.
+function boxBlurPass(src, w, h, r) {
+  const tmp = new Float32Array(src.length);
+  const out = new Float32Array(src.length);
+
+  // horizontal pass
+  for (let y = 0; y < h; y++) {
+    const rowOff = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      let rSum = 0, gSum = 0, bSum = 0, aSum = 0;
+      for (let dx = -r; dx <= r; dx++) {
+        const xx = Math.min(w - 1, Math.max(0, x + dx));
+        const idx = rowOff + xx * 4;
+        rSum += src[idx]; gSum += src[idx + 1]; bSum += src[idx + 2]; aSum += src[idx + 3];
+      }
+      const count = r * 2 + 1;
+      const idx = rowOff + x * 4;
+      tmp[idx] = rSum / count; tmp[idx + 1] = gSum / count; tmp[idx + 2] = bSum / count; tmp[idx + 3] = aSum / count;
+    }
+  }
+
+  // vertical pass
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) {
+      let rSum = 0, gSum = 0, bSum = 0, aSum = 0;
+      for (let dy = -r; dy <= r; dy++) {
+        const yy = Math.min(h - 1, Math.max(0, y + dy));
+        const idx = (yy * w + x) * 4;
+        rSum += tmp[idx]; gSum += tmp[idx + 1]; bSum += tmp[idx + 2]; aSum += tmp[idx + 3];
+      }
+      const count = r * 2 + 1;
+      const idx = (y * w + x) * 4;
+      out[idx] = rSum / count; out[idx + 1] = gSum / count; out[idx + 2] = bSum / count; out[idx + 3] = aSum / count;
+    }
+  }
+  return out;
+}
+
 function softBlur(canvas) {
   const w = canvas.width, h = canvas.height;
-  const factor = 6;
-  const small = createCanvas(Math.max(1, Math.round(w / factor)), Math.max(1, Math.round(h / factor)));
-  const sctx = small.getContext("2d");
-  sctx.imageSmoothingEnabled = true;
-  sctx.imageSmoothingQuality = "high";
-  sctx.drawImage(canvas, 0, 0, w, h, 0, 0, small.width, small.height);
+  const ctx = canvas.getContext("2d");
+  const imageData = ctx.getImageData(0, 0, w, h);
+
+  // radius proporsional ke ukuran gambar, blur tipis khas brat (bukan berat)
+  const radius = Math.max(1, Math.round(Math.min(w, h) / 160));
+
+  let data = imageData.data;
+  for (let i = 0; i < 3; i++) { // 3 pass box blur ≈ gaussian blur
+    data = boxBlurPass(data, w, h, radius);
+  }
 
   const out = createCanvas(w, h);
   const octx = out.getContext("2d");
-  octx.imageSmoothingEnabled = true;
-  octx.imageSmoothingQuality = "high";
-  octx.drawImage(small, 0, 0, small.width, small.height, 0, 0, w, h);
+  const outImageData = octx.createImageData(w, h);
+  outImageData.data.set(data);
+  octx.putImageData(outImageData, 0, 0);
   return out;
 }
 
