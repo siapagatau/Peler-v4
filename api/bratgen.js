@@ -90,66 +90,6 @@ function rebuildLines(segments, maxWidth, ctx, fontSize) {
   return lines;
 }
 
-// Ganti sharp .blur(): box blur asli di atas pixel data (bukan downsample-upscale
-// yang bikin hasil burik/pecah). 3 pass box blur ≈ gaussian blur yang halus.
-function boxBlurPass(src, w, h, r) {
-  const tmp = new Float32Array(src.length);
-  const out = new Float32Array(src.length);
-
-  // horizontal pass
-  for (let y = 0; y < h; y++) {
-    const rowOff = y * w * 4;
-    for (let x = 0; x < w; x++) {
-      let rSum = 0, gSum = 0, bSum = 0, aSum = 0;
-      for (let dx = -r; dx <= r; dx++) {
-        const xx = Math.min(w - 1, Math.max(0, x + dx));
-        const idx = rowOff + xx * 4;
-        rSum += src[idx]; gSum += src[idx + 1]; bSum += src[idx + 2]; aSum += src[idx + 3];
-      }
-      const count = r * 2 + 1;
-      const idx = rowOff + x * 4;
-      tmp[idx] = rSum / count; tmp[idx + 1] = gSum / count; tmp[idx + 2] = bSum / count; tmp[idx + 3] = aSum / count;
-    }
-  }
-
-  // vertical pass
-  for (let x = 0; x < w; x++) {
-    for (let y = 0; y < h; y++) {
-      let rSum = 0, gSum = 0, bSum = 0, aSum = 0;
-      for (let dy = -r; dy <= r; dy++) {
-        const yy = Math.min(h - 1, Math.max(0, y + dy));
-        const idx = (yy * w + x) * 4;
-        rSum += tmp[idx]; gSum += tmp[idx + 1]; bSum += tmp[idx + 2]; aSum += tmp[idx + 3];
-      }
-      const count = r * 2 + 1;
-      const idx = (y * w + x) * 4;
-      out[idx] = rSum / count; out[idx + 1] = gSum / count; out[idx + 2] = bSum / count; out[idx + 3] = aSum / count;
-    }
-  }
-  return out;
-}
-
-function softBlur(canvas) {
-  const w = canvas.width, h = canvas.height;
-  const ctx = canvas.getContext("2d");
-  const imageData = ctx.getImageData(0, 0, w, h);
-
-  // radius proporsional ke ukuran gambar, blur tipis khas brat (bukan berat)
-  const radius = Math.max(1, Math.round(Math.min(w, h) / 160));
-
-  let data = imageData.data;
-  for (let i = 0; i < 3; i++) { // 3 pass box blur ≈ gaussian blur
-    data = boxBlurPass(data, w, h, radius);
-  }
-
-  const out = createCanvas(w, h);
-  const octx = out.getContext("2d");
-  const outImageData = octx.createImageData(w, h);
-  outImageData.data.set(data);
-  octx.putImageData(outImageData, 0, 0);
-  return out;
-}
-
 // ── MAIN HANDLER ───────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -164,7 +104,6 @@ module.exports = async (req, res) => {
       highlight = "",
       width     = "512",
       height    = "512",
-      blur      = "true",
     } = req.query || {};
 
     if (!text || !String(text).trim()) {
@@ -176,7 +115,6 @@ module.exports = async (req, res) => {
     const highlightWords = highlight ? String(highlight).split(",").map(s => s.trim()).filter(Boolean) : [];
     const W = Math.max(64, parseInt(width)  || 512);
     const H = Math.max(64, parseInt(height) || 512);
-    const doBlur = String(blur).toLowerCase() !== "false";
 
     const margin = 8, verticalPadding = 8;
     const canvas = createCanvas(W, H);
@@ -255,16 +193,14 @@ module.exports = async (req, res) => {
       y += lineHeight;
     }
 
-    const finalCanvas = doBlur ? softBlur(canvas) : canvas;
-
     // ── OUTPUT: WEBP (dengan fallback ke PNG kalau encode webp gagal) ──────
     let outBuffer, contentType;
     try {
-      outBuffer = await finalCanvas.encode("webp");
+      outBuffer = await canvas.encode("webp");
       contentType = "image/webp";
     } catch (encodeErr) {
       console.error("WebP encode gagal, fallback ke PNG:", encodeErr.message);
-      outBuffer = finalCanvas.toBuffer("image/png");
+      outBuffer = canvas.toBuffer("image/png");
       contentType = "image/png";
     }
 
