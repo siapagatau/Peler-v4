@@ -55,7 +55,7 @@ module.exports = async (req, res) => {
 
     // ⚠️ Sesuaikan koordinat frame ini dengan posisi kotak foto
     // di template leave.jpg kamu (ukur pakai editor gambar)
-    const FRAME = { x: 100, y: 60, w: 165, h: 165, r: 6 };
+    const FRAME = { x: 80, y: 95, w: 165, h: 165, r: 6 };
 
     const avatarImg = await loadSafe(avatar);
     if (avatarImg) {
